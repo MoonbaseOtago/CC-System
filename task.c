@@ -1,3 +1,5 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
+
 //#define XMT
 #include <mcs51reg.h>
 #include <cc2530.h>

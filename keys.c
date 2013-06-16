@@ -1,3 +1,5 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
+
 #include "interface.h"
 
 #define SCAN_RATE HZ/4

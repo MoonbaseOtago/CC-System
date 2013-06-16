@@ -1,3 +1,4 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
 #ifndef ___RF_H
 #define ___RF_H
 

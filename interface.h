@@ -1,3 +1,5 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
+
 #ifndef __interface_h
 #define __interface_h
 

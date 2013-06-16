@@ -1,3 +1,4 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
 #ifndef __suota_h_
 #define __suota_h_
 #include "interface.h"

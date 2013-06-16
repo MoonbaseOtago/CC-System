@@ -1,3 +1,4 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
 #ifndef _TASK_H
 #define _TASK_H
 

@@ -1,3 +1,5 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
+
 #include <cc2530.h>
 #include <stdio.h>
 #include "interface.h"

@@ -1,3 +1,4 @@
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
 #ifndef __PACKET_INTERFACE
 #define PACKET_INTERFACE
 
