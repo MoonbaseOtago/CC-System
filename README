@@ -1,0 +1,285 @@
+(c) Copyright Paul Campbell paul@taniwha.com 2013
+
+NOTE: lots here is still subject to change - we'll slowly chill then freeze the API over the next few
+months
+
+CC25xx RF library - this code is primarily intended for the raw 802.15 2533 interface but includes
+some more generic OS features to help build usefull systems.
+
+Include files
+=============
+
+'apps' that want to work with bthis world should include 'interface.h' (which may pull in other include
+files)- if you find you're including other include files you're probably not writing portable code.
+
+OS model
+========
+
+The totally minimal OS smply consists of a timer queue - clients can queue events to occur some time in
+the future - there are 32kHz/256 timer ticks per second (we provide a define HZ which is 32000/256) - this
+timer runs with the rest of the chip in it's very deep sleep mode (we'll add an API for that soon).
+
+A 'task' is a queueable element, it must be stored in __xdata, it contains a pointer to some code and
+some task queue bookkeeping (theese should be initialised to 0) - create a task with something like:
+
+	void task_callback_routine(task_t  *);
+	__xdata task task_block = {task_callback_routine,0,0,0};
+
+Queue a task with:
+
+	queue_task(&task_block, HZ/2);	// call task_callback_routine(&task_block) 1/2 a second from now
+
+You can cancel a task with:
+
+	cancel_task(&task_block);
+
+A common thing to do is to call queue_task() with 0 which means call it asap (actually it goes after all
+the other tasks about to be called). We have a shortcut for that queue_task_0(&task_block) which also
+solves the problem of making calling it from interrupts safely (and sdcc's static storage of call arguments)
+
+Task callback routines are called with the task block that was called out as a parameter - they've been
+removed from the list and it's quit safe (and normal) to call queue_task() on them from within a callback
+routine.
+
+A task will not be interrupted by another task (even one queued with time 0 by an interrupt). There is no
+preemption here, one tiny stack that has to be shared by everyone, local variables are expensive in this
+architecture so use global variables - a state machine kicked by app calls and task callbacks is the
+prefered way to go.
+
+You should spend minimal time in tasks, as little as possible, get in do something, get out asap, don't
+spin to delay time, queue another task.
+
+
+RF access
+=========
+
+We have a bunch of routines for sending packets and controlling the RF interface:
+
+
+	void rf_receive_on();	// turns the receiver on
+	void rf_receive_off();	// turns the receiver off (saves a lot of power)
+	
+
+	void rf_set_transmit_power(char power); // sets output power 
+		// valid values:	XMT_POWER_NEG_3DB	-3dB
+		//			XMT_POWER_0DB		0dB
+		//			XMT_POWER_4DB		+4dB
+		//			XMT_POWER_MAXDB		MAX
+
+	void rf_set_channel(u8 channel);	// channel 11-?
+
+	void rf_set_key(u8 *key);	// set the 16-byte send/receive crypto key
+	void rf_set_mac(u8 *key);	// set the 8-byte mac
+
+	void rf_send(packet __xdata* pkt, u8 len, u8 crypto);
+
+rf_rend() sends a packet of length len, and applies crypto if requested using the last key set - no garuntee is provided that a data gram will be received. (needs some work, we need an api for setting a MAC/PAN to send to). The packet must be stored in __xdata.
+
+The packet format we use is optional - you can use anything you like - however of you want to
+use software update over the air you'll have to play noce and use it since the SUOTA protocol uses it.
+
+	typedef struct packet {
+        	u8      type;
+        	u8      id[2];
+        	u8      arch;
+        	u8      version[3];
+        	u8      hops;
+        	u8      uniq[2];        // uniq filter
+        	u8      data[1];
+	} packet;
+
+	//  type 	packet type - if you want to choose your own choose values over 0x40
+	//		if you use crypto with private keys for all packets you wont collide
+	//		as you'll never see anyoine else's packets
+	//  id[2]	node id - used to avoid broadcast storms in macless environments
+	//  arch 	software object we support
+	//  version[3]	version of software we support 
+	//  hops	used to stop packets from living forever in the net
+	//  uniq[2]	unique packet filter (for routing) - if you set hops to 0 these
+	//		bytes are available to you
+	//  data[N]	data payload - you only have ~100 bytes 802.11 packets are tiny
+
+rf_send() will fill in id, arch, version for you
+
+The App interface is used to receive packets and will also poll for a crypto key and mac address during
+system bringup. 
+
+
+Applications
+============
+
+The basic idea behind applications is that a CPU can have a small kernel and an application - the kernel
+is fixed at manufactruring time while the application portion can be reliably updated over the radio
+at any time - the kernel uses a small portion of the available flash memory (8k is the goal) - the rest
+(24k on a 32k 2533) is split in two: half for the currently running app, the other half for an upgrading 
+version.
+
+At boot time the kernel runs a CRC check on the app image with the highest version number,
+if it passes it becomes the running app, if the CRC fails the other app image is tested and if neither
+passes a dummy app is installed (updates can still occur).
+
+Apps have a standard App header:
+
+	typedef struct code_hdr {
+        	unsigned long    crc;         
+		unsigned char    arch;
+        	unsigned char    version[3];
+        	unsigned int     len;
+        	unsigned char	 data[1];
+	} code_hdr;
+
+The app is valid if a CRC32 for len bytes from 'arch' matches the CRC in the header - the entry point (code)
+to the application starts at data[] - there's examples of how to code this in the sample app - this is
+likely to change.
+
+An app consists of a single event routine which is called with an event selector, like everything get in
+get out, as fast as you can - these calls are made from task callout routines:
+
+	void *
+	app(unsigned char op)
+	{
+		case APP_INIT:
+			//
+			//	called once when an app originally starts, set up your hardware, any
+			//	interrupts start tasks to perform periodic operations
+			//
+			return 0;	// return ignored
+		case APP_GET_MAC:
+			//
+			//	return the address of the 8 byte mac address to use for
+			//	this board - if you return NULL it will use the default 
+			//	address programmed into the board at manufacture
+			//	(can be overridden with rf_set_mac()
+			//
+			return (void *)&mac;
+		case APP_GET_KEY:
+			//
+			//	return the address of the 16 byte aes key to use for
+			//	this board - if you return NULL it will use the default 
+			//	key programmed into the board at manufacture
+			//	(can be overridden with rf_set_key()
+			//
+			return (void *)&key;
+		case APP_RCV_PACKET:
+			{
+				// these are defined in interface.h, locations may change
+				extern u8 __pdata rx_len;
+				extern u8 __pdata rx_status[2];
+				extern packet __xdata  * __pdata rx_packet;
+				extern __bit rx_crypto;
+			
+				//
+				// rx_len bytes are stored pointed to by rx_packet;
+				//	if rx_crypto is set the packet was encrypted 
+				//	(and passed, bad crypto'd packets are discarded)
+				//	rx_status are the status bytes from the receiver
+				//
+				// when called the receiver is still running but can only buffer 
+				//	aa packet or two (depends on length) so be quick
+				//
+			}
+			return 0;	// ignored
+		case APP_WAKE:	
+			// power wake (not yet implemented)
+			return 0;	// ignored
+
+		case APP_KEY:		// only on playa boards - capacitive key presses/releases
+			{
+				// these are defined in interface.h, locations may change
+				extern u8 __pdata key;
+				extern __bit key_down;
+				#define	KEY_X		0
+				#define	KEY_O		1
+				#define	KEY_LEFT	2
+				#define	KEY_RIGHT	3
+				//
+				//	key code for pressed key is in key, whether it was pressed
+				//		or released is in key_down
+				//
+			}
+			return 0;	// ignored
+
+		default:
+			return 0;	// for future compatability return 0 for undefined selectors
+		}
+	}
+
+Software Update
+===============
+
+Software updates will be controllable - you can turn them off - and allow them to occur without crypto -
+normally we will only accept update packets that match our cryto key, our current 'arch' and have a version
+number bigger than our current app's version.
+
+There will also be a mechanism to pass state from one set of formware and another and to switch without
+rebooting.
+
+The 8051 has no long relative jumps/calls so even versioned app images are loaded into the low half
+of the app memory space and odd versioned ones into the high space - software upgrade is a scary time, we
+don't want to brick a board - upgrading from an even version to an even version or odd to odd, requires
+an extra flash copy that can destroy both images if the power goes out half way through (the resultant
+CRC failure should allow it to recover and reload cleanly) - this means we (eventually will) have a build
+mechanism to compile an app to the appropriate address to match its version number (and a tool to fill the
+CRC).
+
+Optional APIs
+=============
+
+These APIs are optional, may not be compiled into every board
+
+LED control: (Playa board)
+
+	void leds_rgb(unsigned char * __xdata);	// 6 bytes RRGGBB
+	void leds_off();			// turn the LEDs off (and shut down the power inverter)
+
+Daylight sensor: (Playa board)
+
+	unsigned char daylight();		// true if the daylight sensor detects
+
+Keyboard controller: (Playa board)
+
+	void keys_ok();
+	void keys_off();
+
+General:
+
+	void putchar(char c);
+	void putstr(char __code *cp);
+	void puthex(unsigned char v);
+
+
+Interrupts
+==========
+
+There are some non-obvious things that need to be saved when you take an interrupt:
+
+- the extra 25xx dptr registers
+	- DPS (set to 0 on entry)
+	- DPL1
+	- DPH1
+- parameters and local variables to routines that the compiler
+	has made static (ie all of them) - we provide a 
+	queue_task_0() that saves the time parameter to 
+	queue_task() for you and passes 0
+	
+Check out the examples provided
+
+Notes about memory
+==================
+
+8051 memory is complex there's lots of different types - SDCC names the:
+
+- __bit - bytes 0x20-0x37 of direct memory as bits
+- __data - bytes 0x40-0x7f of direct memory as bytes
+- __pdata - bytes  0x0000-0x00ff of sram
+- __xdata - bytes 0x0000-???? of sram
+
+the kernel uses register set 1 in interupts, and set 0 in tasks - sets 2 and 3 are free for apps to use
+
+The compiler normally allocates memory (from all of these) and has already allocated some space for
+the kernel, short term we're compiling apps and the kernel together, later we'll have a mechanism
+so that an app can compile against a kernel's symbol table so that memory doesn't get double allocated 
+(and we can call kernel routines).
+
+It's reccomend that you type all your pointers with the memory it points to - the untyped pointer
+implementation is very slow.

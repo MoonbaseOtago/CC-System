@@ -39,11 +39,17 @@ leds.rel:	leds.s
 app.rel:	app.c  interface.h 
 	$(CC) $(CFLAGS) -c app.c
 clean:
-	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o
+	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf
 
 packet_interface.o:	packet_interface.h packet_interface.cpp
 	g++ -c packet_interface.cpp
 
 SOBJ = serial_app.rel
 serial.hex:	$(OBJ) packet_interface.o $(SOBJ)
-	$(LD) $(LDFLAGS) -o sys.hex $(OBJ) $(SOBJ)
+	$(LD) $(LDFLAGS) -o serial.hex $(OBJ) $(SOBJ)
+
+s.rel: s.c 
+	$(CC) $(CFLAGS) -c s.c
+s.hex:	s.rel
+	$(LD) $(LDFLAGS) -o s.hex s.rel
+

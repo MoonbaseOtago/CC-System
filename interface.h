@@ -9,7 +9,7 @@
 
 typedef struct packet {
 	u8	type;
-	u8	id[4];
+	u8	id[2];
 	u8	arch;
 	u8	version[3];
 	u8	hops;
@@ -59,10 +59,17 @@ void rf_receive_on(void);
 void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
-void rf_set_mac(u8 __xdata *m);
+extern void rf_set_mac(u8 __xdata *m);
 extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto);
+#define	XMT_POWER_NEG_3DB	-3
+#define	XMT_POWER_0DB		0
+#define	XMT_POWER_4DB		4
+#define	XMT_POWER_MAXDB		100
+extern void rf_set_transmit_power(char power)
+
+
 extern unsigned char daylight();
-extern void keys_ok();
+extern void keys_on();
 extern void keys_off();
 extern void putstr(char __code *cp);
 extern void puthex(unsigned char v);

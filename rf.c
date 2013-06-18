@@ -22,7 +22,7 @@ __pdata static u8 nonce_tx[16];
 __pdata static u8 nonce_rx[16];
 __pdata static u8 iv[16];
 __pdata static u8 frame_counter[4];
-__pdata u8 rf_id[4];
+__pdata u8 rf_id[2];
 __xdata unsigned char tmp_packet[32];
 static u8 __pdata seq;
 void rf_receive_on(void);
@@ -448,8 +448,8 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto) __naked
 	mov	r5, a		// len
 
 	inc	dptr
-	mov	r0, #_rf_id	//	memcpy(&pkt->id[0], &rf_id[0], 4);
-	mov	r2, #4
+	mov	r0, #_rf_id	//	memcpy(&pkt->id[0], &rf_id[0], 2);
+	mov	r2, #2
 0018$:		movx	a, @r0
 		inc	r0
 		movx	@dptr, a

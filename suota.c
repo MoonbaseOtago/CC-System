@@ -158,7 +158,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 		rp = (suota_resp __xdata*)&pkt->data[0];
 `
 		if (memcpy(&rq->version[0], &current_code->version[0], 3)!=0 ||
-		    memcmp(&rq->id[0], &rf_id[0], 4) != 0) 
+		    memcmp(&rq->id[0], &rf_id[0], 2) != 0) 
 			return;
 		pkt->type = P_TYPE_SUOTA_RESP;
 		offset = rq->offset;
