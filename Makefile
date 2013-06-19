@@ -1,10 +1,10 @@
-all:	sys.hex serial.hex
+all:	sys.hex 
 
 CC = sdcc
 LD = sdcc
 AS = sdas8051
 
-CFLAGS = -mmcs51 --model-medium --opt-code-size --debug
+CFLAGS = -mmcs51 --model-medium --opt-code-size --debug -Iinclude
 CFLAGS += -DKEYS
 LDFLAGS = -mmcs51  --model-medium --opt-code-size --xram-size 3840 --code-size 8192 --debug
 
@@ -21,35 +21,29 @@ sys.hex:	$(OBJ) $(AOBJ)
 test:	$(TOBJ)
 	$(LD) $(LDFLAGS) -o test $(TOBJ)
 
-task.rel:	task.c  rf.h task.h interface.h  suota.h 
-	$(CC) $(CFLAGS) -c task.c
-rf.rel:	rf.c  rf.h task.h interface.h  suota.h
-	$(CC) $(CFLAGS) -c rf.c
-keys.rel:	keys.c  rf.h task.h interface.h  suota.h
-	$(CC) $(CFLAGS) -c keys.c
-serial_app.rel:	serial_app.c  rf.h task.h interface.h  suota.h
-	$(CC) $(CFLAGS) -c serial_app.c
-suota.rel:	suota.c  rf.h task.h interface.h  suota.h
-	$(CC) $(CFLAGS) -c suota.c
+task.rel:	kernel/task.c  include/rf.h include/task.h include/interface.h  include/suota.h 
+	$(CC) $(CFLAGS) -c kernel/task.c
+rf.rel:	kernel/rf.c  include/rf.h include/task.h include/interface.h  include/suota.h
+	$(CC) $(CFLAGS) -c kernel/rf.c
+keys.rel:	kernel/keys.c  include/rf.h include/task.h include/interface.h  include/suota.h
+	$(CC) $(CFLAGS) -c kernel/keys.c
+suota.rel:	kernel/suota.c  include/rf.h include/task.h include/interface.h  include/suota.h
+	$(CC) $(CFLAGS) -c kernel/suota.c
 test.rel:	test.c  
-	$(CC) $(CFLAGS) -c test.c
-leds.rel:	leds.s  
-	$(AS)   -z -l -o leds.rel leds.s
+	$(CC) $(CFLAGS) -c kernel/test.c
+leds.rel:	kernel/leds.s  
+	$(AS)   -z -l -o leds.rel kernel/leds.s
 
-app.rel:	app.c  interface.h 
-	$(CC) $(CFLAGS) -c app.c
+app.rel:	sample_app/app.c  include/interface.h 
+	$(CC) $(CFLAGS) -c sample_app/app.c
 clean:
 	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf
 
-packet_interface.o:	packet_interface.h packet_interface.cpp
-	g++ -c packet_interface.cpp
+packet_interface.o:	serial/packet_interface.h serial/packet_interface.cpp
+	g++ -c serial/packet_interface.cpp -I include
 
+serial_app.rel:	serial/serial_app.c  include/rf.h include/task.h include/interface.h  include/suota.h serial/packet_interface.h
+	$(CC) $(CFLAGS) -c serial/serial_app.c
 SOBJ = serial_app.rel
 serial.hex:	$(OBJ) packet_interface.o $(SOBJ)
 	$(LD) $(LDFLAGS) -o serial.hex $(OBJ) $(SOBJ)
-
-s.rel: s.c 
-	$(CC) $(CFLAGS) -c s.c
-s.hex:	s.rel
-	$(LD) $(LDFLAGS) -o s.hex s.rel
-
