@@ -862,10 +862,27 @@ static void test4(task __xdata*t)
 	d.pkt.data[2] = 0x56;
 	d.pkt.data[3] = 0x78;
 	d.pkt.data[4] = 0x90;
-	rf_send(&d.pkt, sizeof(d.pkt)-1+5, 0);
+	rf_send(&d.pkt, sizeof(d.pkt)-1+5, 0, 0);
 	queue_task(&test_task4,  2*HZ);
 }
 #endif
+
+void 
+uart_init() __naked
+{
+	__asm;
+        orl	_P0DIR, #0x08
+        orl	_P0SEL, #0x08   // p0.3 out - TXD
+        mov	_U0CSR, #0x80
+        mov	_U0GCR, #0x08
+        mov	_U0BAUD, #59
+        mov	_U0CSR, #0x80
+        //U0UCR = 0x82;
+        mov	_U0UCR, #0x82
+        mov	_UTX0IF, #0
+	ret
+	__endasm;
+}
 
 void
 main()
@@ -878,26 +895,15 @@ main()
 	P1 = 0;
 	P1DIR = 0xc1;
 	P0DIR = 0x00;
+        P0SEL = 0;
+        P1SEL = 0;
+        P2SEL = 0;
+        P2DIR = 0;
+        PERCFG = 0;     
 	//
 	// sleep timer
 	//
 	ST2 = 0;
-	//
-	// init uart
-	//
-        PERCFG = 0;     // alt1 - USART0 on P0.3
-        P0DIR = 0x08;
-        P0SEL = 0x08;   // p0.3 out - TXD
-        P2SEL = 0;
-        P1SEL = 0;
-        P2DIR = 0;
-        U0CSR = 0x80;
-        U0GCR = 0x08;
-        U0BAUD = 59;
-        U0CSR = 0x80;
-        //U0UCR = 0x82;
-        U0UCR = 0x82;
-        UTX0IF = 0;
 
 #ifdef APP
 	{
@@ -905,13 +911,9 @@ main()
 		x_app = (unsigned int (* __data ) (u8))(&CODE_HEADER.data[0]);
 	}
 #endif
-	putstr("hello\n");
 	suota_setup();
 	rf_init();
 	(*x_app)(APP_INIT);
-#ifdef KEYS
-	keys_on();
-#endif
 
 #ifdef XMT
 	queue_task(&test_task4,  1*HZ);

@@ -4,23 +4,23 @@ NOTE: lots here is still subject to change - we'll slowly chill then freeze the 
 months
 
 CC25xx RF library - this code is primarily intended for the raw 802.15 2533 interface but includes
-some more generic OS features to help build usefull systems.
+some more generic OS features to help build useful systems.
 
 Include files
 =============
 
-'apps' that want to work with bthis world should include 'interface.h' (which may pull in other include
+'apps' that want to work with this world should include 'interface.h' (which may pull in other include
 files)- if you find you're including other include files you're probably not writing portable code.
 
 OS model
 ========
 
-The totally minimal OS smply consists of a timer queue - clients can queue events to occur some time in
+The totally minimal OS simply consists of a timer queue - clients can queue events to occur some time in
 the future - there are 32kHz/256 timer ticks per second (we provide a define HZ which is 32000/256) - this
 timer runs with the rest of the chip in it's very deep sleep mode (we'll add an API for that soon).
 
 A 'task' is a queueable element, it must be stored in __xdata, it contains a pointer to some code and
-some task queue bookkeeping (theese should be initialised to 0) - create a task with something like:
+some task queue bookkeeping (these should be initialised to 0) - create a task with something like:
 
 	void task_callback_routine(task_t  *);
 	__xdata task task_block = {task_callback_routine,0,0,0};
@@ -44,7 +44,7 @@ routine.
 A task will not be interrupted by another task (even one queued with time 0 by an interrupt). There is no
 preemption here, one tiny stack that has to be shared by everyone, local variables are expensive in this
 architecture so use global variables - a state machine kicked by app calls and task callbacks is the
-prefered way to go.
+preferred way to go.
 
 You should spend minimal time in tasks, as little as possible, get in do something, get out asap, don't
 spin to delay time, queue another task.
@@ -71,12 +71,14 @@ We have a bunch of routines for sending packets and controlling the RF interface
 	void rf_set_key(u8 *key);	// set the 16-byte send/receive crypto key
 	void rf_set_mac(u8 *key);	// set the 8-byte mac
 
-	void rf_send(packet __xdata* pkt, u8 len, u8 crypto);
+	void rf_send(packet __xdata* pkt, u8 len, u8 crypto, u8 __xdata*mac);
 
-rf_rend() sends a packet of length len, and applies crypto if requested using the last key set - no garuntee is provided that a data gram will be received. (needs some work, we need an api for setting a MAC/PAN to send to). The packet must be stored in __xdata.
+rf_rend() sends a packet of length len, and applies crypto if requested using the last key set - no
+guarantee is provided that a data gram will be received. The packet must be stored in __xdata. The 'mac' argument can be NULL, if so a broadcast packet will be sent, otherwise a 64-bit MAC address is required.
+
 
 The packet format we use is optional - you can use anything you like - however of you want to
-use software update over the air you'll have to play noce and use it since the SUOTA protocol uses it.
+use software update over the air you'll have to play nice and use it since the SUOTA protocol uses it.
 
 	typedef struct packet {
         	u8      type;
@@ -90,7 +92,7 @@ use software update over the air you'll have to play noce and use it since the S
 
 	//  type 	packet type - if you want to choose your own choose values over 0x40
 	//		if you use crypto with private keys for all packets you wont collide
-	//		as you'll never see anyoine else's packets
+	//		as you'll never see anyone else's packets
 	//  id[2]	node id - used to avoid broadcast storms in macless environments
 	//  arch 	software object we support
 	//  version[3]	version of software we support 
@@ -102,14 +104,14 @@ use software update over the air you'll have to play noce and use it since the S
 rf_send() will fill in id, arch, version for you
 
 The App interface is used to receive packets and will also poll for a crypto key and mac address during
-system bringup. 
+system bring up. 
 
 
 Applications
 ============
 
 The basic idea behind applications is that a CPU can have a small kernel and an application - the kernel
-is fixed at manufactruring time while the application portion can be reliably updated over the radio
+is fixed at manufacturing time while the application portion can be reliably updated over the radio
 at any time - the kernel uses a small portion of the available flash memory (8k is the goal) - the rest
 (24k on a 32k 2533) is split in two: half for the currently running app, the other half for an upgrading 
 version.
@@ -175,7 +177,7 @@ get out, as fast as you can - these calls are made from task callout routines:
 				//	rx_status are the status bytes from the receiver
 				//
 				// when called the receiver is still running but can only buffer 
-				//	aa packet or two (depends on length) so be quick
+				//	a packet or two (depends on length) so be quick
 				//
 			}
 			return 0;	// ignored
@@ -200,7 +202,7 @@ get out, as fast as you can - these calls are made from task callout routines:
 			return 0;	// ignored
 
 		default:
-			return 0;	// for future compatability return 0 for undefined selectors
+			return 0;	// for future comparability return 0 for undefined selectors
 		}
 	}
 
@@ -211,7 +213,7 @@ Software updates will be controllable - you can turn them off - and allow them t
 normally we will only accept update packets that match our cryto key, our current 'arch' and have a version
 number bigger than our current app's version.
 
-There will also be a mechanism to pass state from one set of formware and another and to switch without
+There will also be a mechanism to pass state from one set of firmware and another and to switch without
 rebooting.
 
 The 8051 has no long relative jumps/calls so even versioned app images are loaded into the low half
@@ -243,6 +245,7 @@ Keyboard controller: (Playa board)
 
 General:
 
+	void uart_init();	// set up uart 0 for output (only)
 	void putchar(char c);
 	void putstr(char __code *cp);
 	void puthex(unsigned char v);
@@ -274,12 +277,12 @@ Notes about memory
 - __pdata - bytes  0x0000-0x00ff of sram
 - __xdata - bytes 0x0000-???? of sram
 
-the kernel uses register set 1 in interupts, and set 0 in tasks - sets 2 and 3 are free for apps to use
+the kernel uses register set 1 in interrupts, and set 0 in tasks - sets 2 and 3 are free for apps to use
 
 The compiler normally allocates memory (from all of these) and has already allocated some space for
 the kernel, short term we're compiling apps and the kernel together, later we'll have a mechanism
 so that an app can compile against a kernel's symbol table so that memory doesn't get double allocated 
 (and we can call kernel routines).
 
-It's reccomend that you type all your pointers with the memory it points to - the untyped pointer
+It's recommended that you type all your pointers with the memory it points to - the untyped pointer
 implementation is very slow.

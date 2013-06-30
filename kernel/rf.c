@@ -45,8 +45,6 @@ void rf_receive_on(void);
 extern void putstr (const char __code*);
 extern void puthex (unsigned char );
 static u8 __xdata mac[8];
-void a1() { putstr("a1\n");}
-void a2() { putstr("a2\n");}
 
 static __code unsigned char default_mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
 
@@ -454,7 +452,7 @@ void rf_isr()  __interrupt(16) __naked
 
 
 void
-rf_send(packet __xdata *pkt, u8 len, u8 crypto) __naked
+rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __naked
 {
 	__asm;
 	mov	r6, dpl
@@ -516,27 +514,44 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto) __naked
 	// crypto
         //	securityControl;
     	//	frameCounter[4];
-	mov	dptr, #_tmp+18		//	p = &tmp[18];
+	mov	r0, #_rf_send_PARM_4
+	movx	a, @r0		//	if (!crypto) {
+	mov	r3, a
+	mov	r2, #0
+	inc	r0
+	movx    a, @r0
+	mov	r4, a
+	orl	a, r3
+	jz	2012$
+		mov	a, #8
+2012$:
+	mov	r2, a
 	mov	r0, #_rf_send_PARM_3
 	movx	a, @r0			//	if (!crypto) {
 	jnz	0012$
 		mov	a, r5		//		RFD = len+HDR_SIZE+0;
 		add	a, #HDR_SIZE
+		add	a, r2
 		mov	_RFD, a
 		mov	a, #(1<<0)|(1<<6)//	} else {
 		sjmp	0013$
 
 0012$:	 	mov	a, r5		//		RFD = len+HDR_SIZE+5;
 		add	a, #HDR_SIZE+5
+		add	a, r2
 		mov	_RFD, a
 		mov     a, #(1<<0)|(1<<6)|(1<<3)//}
 
-0013$:	mov	_RFD, a			//	RFD = *p++ =  	(1<<0)|	// DATA			fc0
+0013$:
+	mov	dptr, #_tmp+18		//	p = &tmp[18];
+	mov	_RFD, a			//	RFD = *p++ =  	(1<<0)|	// DATA			fc0
 	movx	@dptr, a		//	   		(crypto?(1<<3):(0<<3))|	// crypto
 	inc	dptr			//	      		(0<<4)|	// frame pending
 					//	      		(0<<5)|	// ack request 
 					//	     		(1<<6);	// pan compression
-	mov	a, #(2<<2)|(1<<4)|(3<<6)//	RFD = *p++ =	(2<<2)| // dest addressing (16-bit broadcast)
+	mov	a, r2
+	rr	a	// 4 or 0  -> dest addressing 64-bit or 16-bit broadcast
+	orl	a, #(2<<2)|(1<<4)|(3<<6)//	RFD = *p++ =	(2<<2)| // dest addressing (16-bit broadcast)
 	mov	_RFD, a			//		    	(1<<4)|	// frame version
 	movx	@dptr, a		//		      	(3<<6);	// source addressing 64-bit address
 	inc	dptr
@@ -548,14 +563,40 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto) __naked
 	movx	@dptr, a
 	inc	dptr
 
-	mov	r2, #4		//	RFD = *p++ = 0xff;	// dest pan
-	mov	a, #0xff	//	RFD = *p++ = 0xff;
-0011$:		movx    @dptr, a//	RFD = *p++ = 0xff;	// dest broadcast
-		inc	dptr	//	RFD = *p++ = 0xff;
-		mov	_RFD, a
-		djnz	r2, 0011$
+	cjne	r3, #0, 2013$
+	cjne	r4, #0, 2013$
+		mov	r2, #4		//	RFD = *p++ = 0xff;	// dest pan
+		mov	a, #0xff	//	RFD = *p++ = 0xff;
+0011$:			movx    @dptr, a//	RFD = *p++ = 0xff;	// dest broadcast
+			inc	dptr	//	RFD = *p++ = 0xff;
+			mov	_RFD, a
+			djnz	r2, 0011$
+		sjmp	2014$
+2013$:
+		mov	a, #0xff	//	RFD = *p++ = 0xff;
+		movx    @dptr, a	//	RFD = *p++ = 0xff;	// dest broadcast pan
+		inc	dptr
+		movx    @dptr, a
+		mov     _RFD, a
+		mov     _RFD, a
+		mov	r2, #8		//	RFD = *p++ = *xmac++;	// dest addres
+				 	//	RFD = *p++ = *xmac++;
+					//	RFD = *p++ = *xmac++;
+		mov	_DPL1, r3	//	RFD = *p++ = *xmac++;
+					//	RFD = *p++ = *xmac++;
+					//	RFD = *p++ = *xmac++;
+		mov	_DPH1, r4
+2110$:			mov	_DPS, #1//	RFD = *p++ = *xmac++;
+			clr	a
+			movx	a, @dptr// 	RFD = *p++ = *xmac++;	
+			inc 	dptr
+			mov     _DPS, #0
+			mov	_RFD, a
+			movx	@dptr, a
+			inc 	dptr
+			djnz	r2, 2110$
 
-
+2014$:
 	mov	r2, #8		//	RFD = *p++ = *mac++;	// src addres
 			 	//	RFD = *p++ = *mac++;
 				//	RFD = *p++ = *mac++;
@@ -563,7 +604,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto) __naked
 				//	RFD = *p++ = *mac++;
 				//	RFD = *p++ = *mac++;
 	mov	_DPH1, #_mac>>8
-0010$:		mov	_DPS, #1	//	RFD = *p++ = *mac++;
+0010$:		mov	_DPS, #1//	RFD = *p++ = *mac++;
 		clr	a
 		movx	a, @dptr// 	RFD = *p++ = *mac++;	
 		inc 	dptr

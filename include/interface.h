@@ -76,7 +76,7 @@ void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
 extern void rf_set_mac(u8 __xdata *m);
-extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto);
+extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto, __xdata unsigned char *mac);
 #define	XMT_POWER_NEG_3DB	-3
 #define	XMT_POWER_0DB		0
 #define	XMT_POWER_4DB		4
@@ -87,6 +87,7 @@ extern void rf_set_transmit_power(char power);
 extern unsigned char daylight(void);
 extern void keys_on();
 extern void keys_off();
+void uart_init();
 extern void putstr(char __code *cp);
 extern void puthex(unsigned char v);
 

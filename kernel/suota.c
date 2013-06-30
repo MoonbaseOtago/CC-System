@@ -181,7 +181,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 		rp->total_len = current_code->len+4;
 		if (rp->total_len > offset) 
 			memcpy(&rp->data[0], &((u8*)current_code)[offset], sizeof(rp->data));
-		rf_send(pkt, sizeof(packet)-1+sizeof(suota_resp), 1);
+		rf_send(pkt, sizeof(packet)-1+sizeof(suota_resp), 1, 0);
 	} else
 	if (pkt->type == P_TYPE_SUOTA_RESP) {
 		unsigned int len;
@@ -250,7 +250,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 				// restart!
 			}
 		}
-		rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), 1);
+		rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), 1, 0);
 		queue_task(&suota_task, 255);
 	} 
 	
@@ -264,7 +264,7 @@ static void suota_request()
 	rq->arch = THIS_ARCH;
         rq->offset = suota_offset;
 	pkt->type = P_TYPE_SUOTA_REQ;
-	rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), 1);
+	rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), 1, 0);
 	queue_task(&suota_task, 255);
 }
 

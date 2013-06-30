@@ -27,7 +27,7 @@ typedef struct suota_req {
 	unsigned char arch;
 	unsigned char version[3];
 	unsigned int  offset;
-	u8	      id[4];
+	u8	      id[2];
 } suota_req;
 
 typedef struct suota_resp {

@@ -1,6 +1,22 @@
 //
 // Copyright 2013 Paul Campbell paul@taniwha.com
 //
+// 
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) version 3, or any
+// later version accepted by Paul Campbell , who shall
+// act as a proxy defined in Section 6 of version 3 of the license.
+// 
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public 
+// License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+//
 #include "packet_interface.h"
 #include <fcntl.h>
 #include <errno.h>
@@ -10,7 +26,7 @@
 typedef void *rf_handle;
 typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *data, int len);
 rf_handle
-rf_open(char *serial_device, rf_rcv rcv_callback)
+rf_open(const char *serial_device, rf_rcv rcv_callback)
 {
 	rf_interface *i = new rf_interface(serial_device, rcv_callback);
 	if (!i->opened_ok()) {
@@ -55,35 +71,35 @@ rf_set_channel(rf_handle handle, int channel)
 }
 
 void
-rf_set_key(rf_handle handle, int k, unsigned char *key)
+rf_set_key(rf_handle handle, int k, const unsigned char *key)
 {
 	rf_interface *i = (rf_interface*)handle;
 	i->set_key(k, key);
 }
 
 void
-rf_set_mac(rf_handle handle, unsigned char *mac)
+rf_set_mac(rf_handle handle, const unsigned char *mac)
 {
 	rf_interface *i = (rf_interface*)handle;
 	i->set_mac(mac);
 }
 
 void
-rf_send(rf_handle handle, unsigned char *mac, unsigned char *data, int len)
+rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len)
 {
 	rf_interface *i = (rf_interface*)handle;
 	i->send(mac, data, len);
 }
 
 void
-rf_send_crypto(rf_handle handle, int key, unsigned char *mac, unsigned char *data, int len)
+rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len)
 {
 	rf_interface *i = (rf_interface*)handle;
 	i->send_crypto(key, mac, data, len);
 }
 
 
-rf_interface::rf_interface(char *serial_device, rf_rcv rcv_callback)
+rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 {
 	fd = ::open(serial_device, O_RDWR);
 	if (fd < 0)
@@ -95,6 +111,7 @@ rf_interface::rf_interface(char *serial_device, rf_rcv rcv_callback)
 	pthread_cond_init(&cond, 0);
 	pthread_create(&tid, 0, thread, this);
 }
+
 rf_interface::~rf_interface()
 {
 	if (fd < 0)
@@ -137,7 +154,7 @@ rf_interface::set_channel(int channel)
 }
 
 void
-rf_interface::set_key(int k, unsigned char *key)
+rf_interface::set_key(int k, const unsigned char *key)
 {
 	unsigned char x[17];
 
@@ -147,38 +164,45 @@ rf_interface::set_key(int k, unsigned char *key)
 }
 
 void
-rf_interface::set_mac(unsigned char *mac)
+rf_interface::set_mac(const unsigned char *mac)
 {
 	send_packet(PKT_CMD_SET_MAC, 8, mac);
 }
 
 void
-rf_interface::send(unsigned char *mac, unsigned char *data, int len)
+rf_interface::send(const unsigned char *mac, const unsigned char *data, int len)
 {
-	unsigned char x[8+128];
 	if (len > 128)
 		return;
-	::memcpy(&x[0], mac, 8);
-	::memcpy(&x[8], data, len);
-	send_packet(PKT_CMD_SEND_PACKET, 8+len, &x[0]);
+	if (mac) {
+		unsigned char x[8+128];
+		::memcpy(&x[0], mac, 8);
+		::memcpy(&x[8], data, len);
+		send_packet(PKT_CMD_SEND_PACKET_MAC, 8+len, &x[0]);
+	} else {
+		send_packet(PKT_CMD_SEND_PACKET, len, &data[0]);
+	}
 }
 
 void
-rf_interface::send_crypto(int key, unsigned char *mac, unsigned char *data, int len)
+rf_interface::send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len)
 {
-	unsigned char x[1+8+128];
 	if (len > 128)
 		return;
 	if (key >= 8)
 		return;
-	x[0] = key;
-	::memcpy(&x[1], mac, 8);
-	::memcpy(&x[9], data, len);
-	send_packet(PKT_CMD_SEND_PACKET_CRYPT, 1+8+len, &x[0]);
+	if (mac) {
+		unsigned char x[8+128];
+		::memcpy(&x[0], mac, 8);
+		::memcpy(&x[8], data, len);
+		send_packet(PKT_CMD_SEND_PACKET_CRYPT_MAC+key, 8+len, &x[0]);
+	} else {
+		send_packet(PKT_CMD_SEND_PACKET_CRYPT+key, len, &data[0]);
+	}
 }
 
 void
-rf_interface::send_packet(int cmd, int len, unsigned char *data)
+rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 {
 	unsigned char x[4];
 	int sum = 0;

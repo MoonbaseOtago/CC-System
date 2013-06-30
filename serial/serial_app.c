@@ -20,6 +20,7 @@
 #include <mcs51reg.h>
 #include <cc2530.h>
 #include "interface.h"
+#include "string.h"
 #include "packet_interface.h"
 
 static xxxx() __naked {
@@ -38,16 +39,55 @@ _CODE_HEADER:
 #define RX_SIZE 250
 #define TX_SIZE 250
 unsigned char __xdata rx_buff[RX_SIZE];
-unsigned char __xdata tx_buff[RX_SIZE];
+unsigned char __xdata tx_buff[TX_SIZE];
 __xdata unsigned char *__data  rx_in = &rx_buff[0];
 __xdata unsigned char *__data  rx_out = &rx_buff[0];
 unsigned char __data  rx_count=0;
 __xdata unsigned char *__data  tx_in = &tx_buff[0];
 __xdata unsigned char *__data  tx_out = &tx_buff[0];
-unsigned char __data  tx_count=0;
+unsigned char __data  tx_count=TX_SIZE;
+__bit tx_busy;
 
 static void uart_rcv_thread(task __xdata*t);
 static __xdata task uart_rcv_task = {uart_rcv_thread,0,0,0};
+
+static void tx_intr() __naked 
+{
+	__asm;
+	push	PSW
+	push	ACC
+	mov	a, _tx_count
+	cjne	a, #TX_SIZE, $0901
+
+		clr	_tx_busy
+		anl	_IEN2, #~(1<<2)
+		pop	ACC
+		pop	PSW
+		reti
+$0901:
+	push	_DPS
+	push	_DPH0
+	push	_DPL0
+	mov	_DPS, #0
+	mov	dpl, _tx_out
+	mov	dph, _tx_out+1
+	inc	a
+	mov	_tx_count, a
+	movx	a, @dptr
+	mov	_U0DBUF, a 
+	inc	dptr
+	mov	_tx_out, dpl
+	mov	_tx_out+1, dph
+
+	pop	_DPL0
+	pop	_DPH0
+	pop	_DPS
+	
+	pop	ACC
+	pop	PSW
+	reti
+	__endasm;
+}
 
 static void rx_intr() __naked 
 {
@@ -56,21 +96,21 @@ static void rx_intr() __naked
 	push	ACC
 	mov	a, _rx_count
 	cjne	a, #RX_SIZE, $0001				// if _rx_count == RX_SIZE return
-		mov	a, U0DBUF
+		mov	a, _U0DBUF
 		sjmp	$0002
 $0001:		
-		push	DPS
+		push	_DPS
 		push	dpl
 		push	dph
-		mov	DPS, #0
-		mov	a, U0DBUF				// *_rx_in++ = U0DBUF
+		mov	_DPS, #0
+		mov	a, _U0DBUF				// *_rx_in++ = U0DBUF
 		mov	dpl, _rx_in
 		mov	dph, _rx_in+1
 		movx	@dptr, a
 		inc	dptr
-		mov	a, #(_rx_buff+RX_SIZE)&0xff		// if (rx_in == &rx_buff[RX_SIZE]) 
+		mov	a, #_rx_buff+RX_SIZE		// if (rx_in == &rx_buff[RX_SIZE]) 
 		cjne	a, dpl, $0003
-		mov	a, #((_rx_buff+RX_SIZE)>>8)&0xff
+		mov	a, #(_rx_buff+RX_SIZE)>>8
 		cjne	a, dph, $0003
 			mov	dptr, #_rx_buff			//	rx_in = &rx_buff[0];
 $0003:	
@@ -80,16 +120,16 @@ $0003:
 		jz	$0004
 			inc	a
 			mov 	_rx_count, a
-			push	DPL1
-			push	DPH1
+			push	_DPL1
+			push	_DPH1
 	
 			setb	_RS0	// save regs
 			
 			mov	dptr, #_uart_rcv_task		// queue_task_0(&uart_rcv_task, 0);
 			lcall	_queue_task_0
 	
-			pop	DPH1
-			pop	DPL1
+			pop	_DPH1
+			pop	_DPL1
 			sjmp 	$0005
 $0004:
 			inc	a
@@ -97,7 +137,7 @@ $0004:
 
 $0005:		pop	dph
 		pop	dpl
-		pop	DPS
+		pop	_DPS
 $0002:
 	pop	acc
 	pop 	PSW
@@ -128,7 +168,7 @@ static void uart_rcv_thread(task __xdata*t)
 		if (rx_out == &rx_buff[RX_SIZE])
 			rx_out = &rx_buff[0];
 		rx_count--;
-		IEN0 = a;
+		IEN0 = s;
 		switch (rstate) {
 		case 0: if (c != PKT_MAGIC_0)
 				break;
@@ -153,13 +193,13 @@ static void uart_rcv_thread(task __xdata*t)
 			break;
 		case 4:	r[off++] = c;
 			sum += c;
-			if (off >= len)
+			if (off >= rlen)
 				rstate = 5;
 			break;
 		case 5:	cs0 = c;
-			state = 6;
+			rstate = 6;
 			break;
-		case 6: state = 0;
+		case 6: rstate = 0;
 			if ((sum&0xff) != c)
 				break;
 			if (((sum>>8)&0xff) != cs0)
@@ -171,19 +211,22 @@ static void uart_rcv_thread(task __xdata*t)
 			case PKT_CMD_RCV_ON:
 				rf_receive_on();
 				cur_key = r[0];
-				rf_set_key(&keys[cur_key]);
+				rf_set_key(&keys[cur_key][0]);
 				break;
 			case PKT_CMD_SET_CHANNEL:
 				rf_set_channel(r[0]);
 				break;
 			case PKT_CMD_SET_KEY:
-				memcpy(&keys[r[0]&7], &r[1], 16);
+				memcpy(&keys[r[0]&7][0], &r[1], 16);
 				break;
 			case PKT_CMD_SET_MAC:
 				rf_set_mac(&r[0]);
 				break;
 			case PKT_CMD_SEND_PACKET:
-				rf_send(&r[0], rlen, 0);
+				rf_send((packet __xdata*)&r[0], rlen, 0, 0);
+				break;
+			case PKT_CMD_SEND_PACKET_MAC:
+				rf_send((packet __xdata*)&r[8], rlen-8, 0, &r[0]);
 				break;
 			default:
 				if (cmd >= PKT_CMD_SEND_PACKET_CRYPT && cmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {					     int t = cmd-PKT_CMD_SEND_PACKET_CRYPT;
@@ -191,7 +234,14 @@ static void uart_rcv_thread(task __xdata*t)
 						cur_key = t;
 						rf_set_key(&keys[t][0]);
 					}
-					rf_send(&r[0], rlen, 1);
+					rf_send((packet __xdata*)&r[0], rlen, 1, 0);
+				} else
+				if (cmd >= PKT_CMD_SEND_PACKET_CRYPT_MAC && cmd < (PKT_CMD_SEND_PACKET_CRYPT_MAC+8)) {					     int t = cmd-PKT_CMD_SEND_PACKET_CRYPT;
+					if (cur_key != t) {
+						cur_key = t;
+						rf_set_key(&keys[t][0]);
+					}
+					rf_send((packet __xdata*)&r[8], rlen-8, 1, &r[0]);
 				}
 				break;
 			}
@@ -201,18 +251,62 @@ static void uart_rcv_thread(task __xdata*t)
 	}
 }
 
-static void
-uart_init()
+void
+send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u8 cmd)
 {
-	PERCFG &= ~1;
-	P0SEL |= 0x0c;
-	P2DIR &= 0x3f;
+	unsigned char xl = len+6+8;
+	unsigned int sum = cmd+len+8;
+	unsigned char c, l;
+
+	if (xl > tx_count)
+		return;
+	*tx_in++ = PKT_MAGIC_0;
+	*tx_in++ = PKT_MAGIC_1;
+	*tx_in++ = cmd;
+	*tx_in++ = len+8;
+	l = 8;
+	while (l--) {
+		*tx_in++ = c = *mac++;
+		sum += c;
+	}
+	while (len--) {
+		*tx_in++ = c = *d++;
+		sum += c;
+	}
+	*tx_in++ = sum;
+	*tx_in++ = sum>>8;
+	c = IEN0;
+	IEN0 = 0;
+	tx_count -= xl;
+	if (!tx_busy) {
+		tx_busy = 1;
+		IEN2 |= 1<<2;
+		tx_count++;
+		U0DBUF = *tx_out++;
+	}
+	IEN0 = c;
+}
+
+static void
+uart_setup()
+{
 	uart_rx_0_vect = rx_intr;
-	UxUCR0.FLUSH = 1
-	UxCSR0.RE = 1;
-	IEN0.URX0IE = 1;
+	uart_tx_0_vect = tx_intr;
 
 	//IEN2.UTX0IE = 1;
+        PERCFG  &= ~1;     // alt1 - USART0 on P0.3
+        P0SEL |= 0x0c;   // p0.3 out - TXD
+        P2DIR &= 0x3f;
+        U0CSR = 0x80;
+        U0GCR = 0x08;
+        U0BAUD = 59;
+        U0CSR = 0x80;
+        //U0UCR = 0x82;
+        U0UCR = 0x82; // flush
+        UTX0IF = 0;
+
+	U0CSR |= 0x40;	// enable receiver
+	IEN0 |= 1<<2;
 }
 
 
@@ -221,12 +315,12 @@ static unsigned int my_app(unsigned char op)
 	switch (op) {
 	case APP_INIT:
 		// something to initialise variables - needs compiler hack
-		uart_init();
+		uart_setup();
 		break;
 	case APP_GET_MAC:
-		return (unsigned int)&mac[0];
+		return 0;
 	case APP_GET_KEY:
-		return (unsigned int)&key[cur_key][0]);
+		return (unsigned int)&keys[cur_key][0];
 	case APP_RCV_PACKET:
 		break;
 	}

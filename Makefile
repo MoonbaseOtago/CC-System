@@ -6,7 +6,7 @@ AS = sdas8051
 
 CFLAGS = -mmcs51 --model-medium --opt-code-size --debug -Iinclude
 CFLAGS += -DKEYS
-LDFLAGS = -mmcs51  --model-medium --opt-code-size --xram-size 3840 --code-size 8192 --debug
+LDFLAGS = -mmcs51  --model-medium --opt-code-size --xram-size 3840 --code-size 20480 --debug
 
 
 
@@ -39,8 +39,14 @@ app.rel:	sample_app/app.c  include/interface.h
 clean:
 	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf
 
+packet_test:	packet_interface.o packet_test.o
+	g++ -o packet_test packet_interface.o packet_test.o -lpthread -g
+
+
+packet_test.o:	serial/packet_interface.h serial/test.cpp
+	g++ -c serial/test.cpp -o packet_test.o -I include -I serial -g
 packet_interface.o:	serial/packet_interface.h serial/packet_interface.cpp
-	g++ -c serial/packet_interface.cpp -I include
+	g++ -c serial/packet_interface.cpp -I include -I serial -g
 
 serial_app.rel:	serial/serial_app.c  include/rf.h include/task.h include/interface.h  include/suota.h serial/packet_interface.h
 	$(CC) $(CFLAGS) -c serial/serial_app.c

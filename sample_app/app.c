@@ -49,6 +49,9 @@ static unsigned int my_app(unsigned char op)
 	case APP_INIT:
 		// something to initialise variables - needs compiler hack
 		leds_off();
+		keys_on();
+		uart_init();
+		putstr("Hello World\n");
 		rf_set_channel(11);
 		break;
 	case APP_GET_MAC:
@@ -75,7 +78,7 @@ static unsigned int my_app(unsigned char op)
 				c--;
 			}
 			rx_packet->hops--;
-			rf_send(rx_packet, rx_len, 1);
+			rf_send(rx_packet, rx_len, 1, 0);
 			ph = &uniq_filter[uniq_index];
 			*ph++ = p0;
 			*ph = p1;

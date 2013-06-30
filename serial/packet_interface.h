@@ -34,8 +34,10 @@
 #define PKT_CMD_RCV_PACKET		0x05
 #define PKT_CMD_SET_MAC			0x06
 #define PKT_CMD_SEND_PACKET		0x07
+#define PKT_CMD_SEND_PACKET_MAC		0x08
 #define PKT_CMD_SEND_PACKET_CRYPT	0x20	// 0x20->0x27 depending on key
-#define PKT_CMD_RCV_PACKET_CRYPT	0x40	// only 1 key for now
+#define PKT_CMD_SEND_PACKET_CRYPT_MAC	0x40	// 0x20->0x27 depending on key
+#define PKT_CMD_RCV_PACKET_CRYPT	0x60	// only 1 key for now
 
 #ifndef SDCC
 //
@@ -83,35 +85,35 @@ extern "C" {
 #include <pthread.h>
 typedef void *rf_handle;
 typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *data, int len);
-extern rf_handle rf_open(char *serial_device, rf_rcv rcv_callback);
+extern rf_handle rf_open(const char *serial_device, rf_rcv rcv_callback);
 extern void rf_close(rf_handle handle);
 #define RF_NO_KEY (-1)
 extern void rf_on(rf_handle handle, int key);
 extern void rf_off(rf_handle handle);
 extern void rf_set_auto_dump(rf_handle handle, FILE *output);
 extern void rf_set_channel(rf_handle handle, int channel);
-extern void rf_set_key(rf_handle handle, int k, unsigned char *key);
-extern void rf_set_mac(rf_handle handle, unsigned char *mac);
-extern void rf_send(rf_handle handle, unsigned char *mac, unsigned char *data, int len);
-extern void rf_send_crypto(rf_handle handle, int key, unsigned char *mac, unsigned char *data, int len);
+extern void rf_set_key(rf_handle handle, int k, const unsigned char *key);
+extern void rf_set_mac(rf_handle handle, const unsigned char *mac);
+extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
+extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
 
 #ifdef __cplusplus
 
 class rf_interface {
 public:
-	rf_interface(char *serial_device, rf_rcv rcv_callback);
+	rf_interface(const char *serial_device, rf_rcv rcv_callback);
 	~rf_interface();
 	void on(int key);
 	void off();
 	void set_auto_dump(FILE *output);
 	void set_channel(int channel);
-	void set_key(int k, unsigned char *key);
-	void set_mac(unsigned char *mac);
-	void send(unsigned char *mac, unsigned char *data, int len);
-	void send_crypto(int key, unsigned char *mac, unsigned char *data, int len);
+	void set_key(int k, const unsigned char *key);
+	void set_mac(const unsigned char *mac);
+	void send(const unsigned char *mac, const unsigned char *data, int len);
+	void send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len);
 	int opened_ok() { return fd >= 0; }
 private:
-	void	send_packet(int cmd, int, unsigned char *);
+	void	send_packet(int cmd, int, const unsigned char *);
 	static void *thread(void *);
 	void 	rf_thread();
 	int	fd;
