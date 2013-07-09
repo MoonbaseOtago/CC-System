@@ -35,6 +35,8 @@
 #define PKT_CMD_SET_MAC			0x06
 #define PKT_CMD_SEND_PACKET		0x07
 #define PKT_CMD_SEND_PACKET_MAC		0x08
+#define PKT_CMD_PRINTF			0x09
+#define PKT_CMD_PING			0x0a
 #define PKT_CMD_SEND_PACKET_CRYPT	0x20	// 0x20->0x27 depending on key
 #define PKT_CMD_SEND_PACKET_CRYPT_MAC	0x40	// 0x20->0x27 depending on key
 #define PKT_CMD_RCV_PACKET_CRYPT	0x60	// only 1 key for now
@@ -105,6 +107,7 @@ public:
 	~rf_interface();
 	void on(int key);
 	void off();
+	void ping();
 	void set_auto_dump(FILE *output);
 	void set_channel(int channel);
 	void set_key(int k, const unsigned char *key);

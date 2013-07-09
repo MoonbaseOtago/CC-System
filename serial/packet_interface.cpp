@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <termios.h>
 
 typedef void *rf_handle;
 typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *data, int len);
@@ -101,9 +102,15 @@ rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsign
 
 rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 {
+	struct termios tm;
+
 	fd = ::open(serial_device, O_RDWR);
 	if (fd < 0)
 		return;
+	tcgetattr(fd, &tm);
+	cfmakeraw(&tm);
+	cfsetspeed(&tm, B9600);
+	tcsetattr(fd, TCSAFLUSH, &tm);
 	callback = rcv_callback;
 	shutdown = 0;
 	auto_dump = 0;
@@ -164,6 +171,12 @@ rf_interface::set_key(int k, const unsigned char *key)
 }
 
 void
+rf_interface::ping()
+{
+	send_packet(PKT_CMD_PING, 5, (unsigned char *)"test");
+}
+
+void
 rf_interface::set_mac(const unsigned char *mac)
 {
 	send_packet(PKT_CMD_SET_MAC, 8, mac);
@@ -218,8 +231,8 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 			sum += data[i];
 		::write(fd, data, len);
 	}
-	x[0] = sum>>8;
-	x[1] = sum;
+	x[0] = sum;
+	x[1] = sum>>8;
 	::write(fd, &x[0], 2);
 }
 
@@ -254,7 +267,9 @@ rf_interface::rf_thread()
 			}
 			continue;
 		}
+printf("read %d bytes\n", l);
 		for (int i = 0; i < l; i++) {
+printf("state %d char 0x%02x\n", state, b[i]);
 			switch (state) {
 			case 0: if (b[i] == PKT_MAGIC_0)
 					state = 1;
@@ -283,16 +298,23 @@ rf_interface::rf_thread()
 				if (off >= len)
 					state = 5;
 				break;
-			case 5:	sum2 = b[i]<<8;
+			case 5:	sum2 = b[i];
 				state = 6;
 				break;
-			case 6:	sum2 |= b[i];
+			case 6:	sum2 |= b[i]<<8;
 				state = 0;
 				sum &= 0xffff;
+printf("sums = 0x%04x 0x%04x\n", sum, sum2);
 				if (sum != sum2)
 					break;
 
-				switch(sum) {
+				switch(cmd) {
+				case PKT_CMD_PRINTF:
+					data[len-1] = 0;
+					if (auto_dump) 
+						fprintf(auto_dump, "PRINT: %s", (char *)&data[0]);
+					fprintf(stderr, "PRINT: %s", (char *)&data[0]);
+					break;
 				case PKT_CMD_RCV_PACKET:
 					if (callback) 
 						(*callback)(this, 0, &data[0], &data[8], len-8);

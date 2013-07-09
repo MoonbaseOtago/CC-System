@@ -26,12 +26,12 @@
 #define RX_DATA_SIZE 128
 static __xdata u8 rx_data[RX_DATA_SIZE];
 __bit rx_busy;
-u8 __pdata rx_len;
-u8 __pdata rx_status[2];
-u8 __pdata rx_len;
-u8 __pdata rx_status[2];
-packet __xdata  * __pdata rx_packet;
+u8 __data rx_status[2];
+u8 __data rx_len;
+packet __xdata  * __data rx_packet;
+u8 __xdata * __data rx_mac;
 __bit rx_crypto;
+__bit rx_broadcast;
 __xdata static u8 tmp[128];
 __xdata static u8 cipher[128];
 __pdata static u8 nonce_tx[16];
@@ -218,7 +218,7 @@ aes_op(u8 __xdata* p, u8 op, u8 len, u8 __xdata *pOut, u8 __pdata*iv)
 void
 rcv_handler(task __xdata* ppp)
 {
-
+	u8 hdr;
 // data points to
 //	0:	2 fxf
 //	2:	1 seq
@@ -234,6 +234,15 @@ rcv_handler(task __xdata* ppp)
 //	n-8:	8 crypto
 //
 	
+	if (rx_data[1]&(1<<2)) {	// mac dest
+		hdr = HDR_SIZE-2+6;
+		rx_mac = &rx_data[5+8];
+		rx_broadcast = 0;
+	} else {
+		hdr = HDR_SIZE;
+		rx_mac = &rx_data[5+2];
+		rx_broadcast = 1;
+	}
 	if (rx_data[0]&0x10) { 	// encrypted?
 		u8 c, i, l;
 		u8 __xdata* p;
@@ -243,10 +252,10 @@ rcv_handler(task __xdata* ppp)
 		// c = rx_len-5-8	// length of data
 		// f = 15+5	// length up to start of data
 		// m = 2
-		nonce_rx[9] = rx_data[HDR_SIZE+1];
-		nonce_rx[10] = rx_data[HDR_SIZE+2];
-		nonce_rx[11] = rx_data[HDR_SIZE+3];
-		nonce_rx[12] = rx_data[HDR_SIZE+4];
+		nonce_rx[9] = rx_data[hdr+1];
+		nonce_rx[10] = rx_data[hdr+2];
+		nonce_rx[11] = rx_data[hdr+3];
+		nonce_rx[12] = rx_data[hdr+4];
 		iv[0] = 1;
 		memcpy(&iv[1], &nonce_rx[1], 14);
 		iv[15] = 0;
@@ -256,8 +265,8 @@ rcv_handler(task __xdata* ppp)
 		aes_op(&rx_data[rx_len-8], AES_DECRYPT, LM, tmp, iv);
 		memcpy(&rx_data[rx_len-8], tmp, LM);
 
-		c = rx_len-8-5-HDR_SIZE;
-		memcpy(&cipher[0], &rx_data[HDR_SIZE+5], c);
+		c = rx_len-8-5-hdr;
+		memcpy(&cipher[0], &rx_data[hdr+5], c);
 		p = &cipher[c];
 		l = (c&0xf)==0?c: ((c&0xf0)+0x10);
 		for (i=c; i<l; i++)
@@ -266,7 +275,7 @@ rcv_handler(task __xdata* ppp)
 		ENCCS &= ~0x70;
 		ENCCS |= AES_MODE_CTR;
 		aes_op(&cipher[0], AES_DECRYPT, c, tmp, iv);
-		memcpy(&rx_data[HDR_SIZE+5], &tmp[0], c);
+		memcpy(&rx_data[hdr+5], &tmp[0], c);
 
 		tmp[0] = 0x41 |
 			 ((LM-2)/2)<<3;
@@ -274,10 +283,10 @@ rcv_handler(task __xdata* ppp)
 		tmp[14] = 0;
 		tmp[15] = c;
 		tmp[16] = 0;
-		tmp[17] = HDR_SIZE+5;
-		memcpy(&tmp[18], &rx_data[0], HDR_SIZE+5);
-		i = 18+HDR_SIZE+5;
-		l = ((8+HDR_SIZE+5) & 0x0f )==0 ? (8+HDR_SIZE+5): ((8+HDR_SIZE+5)&0xf0) + 0x10;
+		tmp[17] = hdr+5;
+		memcpy(&tmp[18], &rx_data[0], hdr+5);
+		i = 18+hdr+5;
+		l = ((8+hdr+5) & 0x0f )==0 ? (8+hdr+5): ((8+hdr+5)&0xf0) + 0x10;
 		p = &tmp[18];
 		while (i < l) {
 			i++;
@@ -302,7 +311,7 @@ rcv_handler(task __xdata* ppp)
 		if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0)
 			return;
 		rx_crypto = 1;
-		rx_packet = (packet __xdata *)&rx_data[HDR_SIZE+5];
+		rx_packet = (packet __xdata *)&rx_data[hdr+5];
 		rx_len = c;
 		if (incoming_suota_version(rx_packet))
 			return;
@@ -312,8 +321,8 @@ rcv_handler(task __xdata* ppp)
 		}
 	} else {
 		rx_crypto = 0;
-		rx_len -= HDR_SIZE;
-		rx_packet = (packet __xdata *)&rx_data[HDR_SIZE];
+		rx_len -= hdr;
+		rx_packet = (packet __xdata *)&rx_data[hdr];
 	}
 	app(APP_RCV_PACKET);
 	rx_busy = 0;
@@ -324,9 +333,6 @@ __xdata task rcv_task = {rcv_handler, 0, 0, 0};
 void rf_isr()  __interrupt(16) __naked
 {
    	__asm;
-	mov	_U0DBUF, #'X'	//		U0DBUF = c;
-9004$:	jnb	_UTX0IF, 9004$
-	clr	_UTX0IF
 	// x = EA;
     	// EA = 0;
 	push 	acc
@@ -366,35 +372,14 @@ void rf_isr()  __interrupt(16) __naked
 		ljmp	0001$		//	} else {
 0003$:		
 		mov	dptr, #_rx_data	//		p = &rx_data[0];
-		mov	r0, #_rx_len	//		rx_len = l;
-		mov	a, r1
-		movx	@r0, a
+		mov	_rx_len, r1	//		rx_len = l;
 0004$:		
 			mov	a, _RFD //		while (l--) 
 //			movx	@dptr, a//			*p++ = RFD;
 			inc	dptr
 			djnz	r1, 0004$
-		mov	r0, #_rx_status
-		mov	a, _RFD		//		rx_status[0] = RFD;
-		movx	@r0, a
-		inc	r0
-		mov	a, _RFD		//		rx_status[1] = RFD;
-		movx	@r0, a
-	push	acc
-	swap	a
-	anl	a, #0xf
-	add	a, #'a'
-	mov	_U0DBUF, a	//		U0DBUF = c;
-9006$:	jnb	_UTX0IF, 9006$
-	clr	_UTX0IF
-	pop	acc
-	push	acc
-	anl	a, #0xf
-	add	a, #'a'
-	mov	_U0DBUF, a	//		U0DBUF = c;
-9007$:	jnb	_UTX0IF, 9007$
-	clr	_UTX0IF
-	pop	acc
+		mov	_rx_status, _RFD		//		rx_status[0] = RFD;
+		mov	_rx_status+1, _RFD		//		rx_status[1] = RFD;
 		jnb	acc.7, 0005$	//		if ((rx_status[1]&0x80)) { 	// CRC check
 			setb    _rx_busy	//		rx_busy = 1;
 			push	ar2
@@ -442,15 +427,12 @@ void rf_isr()  __interrupt(16) __naked
 0001$:
     	//EA = x;
 	pop	acc
-	mov	_U0DBUF, #'Y'	//		U0DBUF = c;
-9005$:	jnb	_UTX0IF, 9005$
-	clr	_UTX0IF
 	reti
 	__endasm;
 }
 
 
-
+static __bit xmt_broadcast;
 void
 rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __naked
 {
@@ -460,7 +442,6 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r0, #_rf_send_PARM_2
 	movx	a, @r0
 	mov	r5, a		// len
-
 	inc	dptr
 	mov	r0, #_rf_id	//	memcpy(&pkt->id[0], &rf_id[0], 2);
 	mov	r2, #2
@@ -509,20 +490,22 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
     	//	fcf1;           // Frame control field MSB
     	//	seqNumber;	00
     	//	panId;		ff ff
-    	//	destAddr;	ff ff
+    	//	destAddr;	ff ff or 8 bytes of mac
     	//	srcAddr;	11 22 33 44 55 66 77 88
 	// crypto
         //	securityControl;
     	//	frameCounter[4];
-	mov	r0, #_rf_send_PARM_4
+	mov	r0, #_rf_send_PARM_4	// mac pointer
 	movx	a, @r0		//	if (!crypto) {
 	mov	r3, a
 	mov	r2, #0
 	inc	r0
 	movx    a, @r0
 	mov	r4, a
+	setb	_xmt_broadcast
 	orl	a, r3
 	jz	2012$
+		clr	_xmt_broadcast
 		mov	a, #8
 2012$:
 	mov	r2, a
@@ -550,7 +533,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 					//	      		(0<<5)|	// ack request 
 					//	     		(1<<6);	// pan compression
 	mov	a, r2
-	rr	a	// 4 or 0  -> dest addressing 64-bit or 16-bit broadcast
+	rr	a	// 4 or 0  -> dest addressing 64-bit or 16-bit broadcast (3<<2)
 	orl	a, #(2<<2)|(1<<4)|(3<<6)//	RFD = *p++ =	(2<<2)| // dest addressing (16-bit broadcast)
 	mov	_RFD, a			//		    	(1<<4)|	// frame version
 	movx	@dptr, a		//		      	(3<<6);	// source addressing 64-bit address
@@ -563,8 +546,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	movx	@dptr, a
 	inc	dptr
 
-	cjne	r3, #0, 2013$
-	cjne	r4, #0, 2013$
+	jnb	_xmt_broadcast, 2013$
 		mov	r2, #4		//	RFD = *p++ = 0xff;	// dest pan
 		mov	a, #0xff	//	RFD = *p++ = 0xff;
 0011$:			movx    @dptr, a//	RFD = *p++ = 0xff;	// dest broadcast
@@ -660,10 +642,17 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		movx	@dptr, a
 		inc	dptr
 		mov	a, #HDR_SIZE+5	//	tmp[17] = HDR_SIZE+5;
+		jb	_xmt_broadcast, 5501$
+			add	a, #8-2
+			mov 	r1, #18+HDR_SIZE+5+8-2 //	i = 18+HDR_SIZE+5;
+			mov	r2, #((8+HDR_SIZE+5+8-2)&0xf0) + 0x10 
+			sjmp	5502$
+5501$:
+			mov 	r1, #18+HDR_SIZE+5 //	i = 18+HDR_SIZE+5;
+			mov	r2, #((8+HDR_SIZE+5)&0xf0) + 0x10 
+5502$:
 		movx	@dptr, a
 		mov	_DPS, #0;
-		mov 	r1, #18+HDR_SIZE+5 //	i = 18+HDR_SIZE+5;
-		mov	r2, #((8+HDR_SIZE+5)&0xf0) + 0x10 
 					//	l = ((8+HDR_SIZE+5) & 0x0f )==0 ? (8+HDR_SIZE+5): ((8+HDR_SIZE+5)&0xf0) + 0x10;
 		mov	a, r2
 		clr	c

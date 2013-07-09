@@ -46,10 +46,12 @@ extern unsigned int (* __data x_app) (u8 v);
 #define APP_GET_MAC 		1
 #define APP_GET_KEY 		2
 #define APP_RCV_PACKET		3
-extern u8 __pdata rx_len;
-extern u8 __pdata rx_status[2];
-extern packet __xdata  * __pdata rx_packet;
+extern u8 __data rx_len;
+extern u8 __data rx_status[2];
+extern packet __xdata  * __data rx_packet;
 extern __bit rx_crypto;
+extern __bit rx_broadcast;
+extern u8 __xdata * __data rx_mac;
 #define APP_WAKE		4
 #define APP_KEY			5
 extern u8 __pdata key;
@@ -88,6 +90,7 @@ extern unsigned char daylight(void);
 extern void keys_on();
 extern void keys_off();
 void uart_init();
+extern void putchar(char c);
 extern void putstr(char __code *cp);
 extern void puthex(unsigned char v);
 

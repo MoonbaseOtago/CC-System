@@ -105,6 +105,9 @@ main(int argc, char **argv)
 				on = 1;
 			}
 			break;
+		case 'p':
+			rfp->ping();
+			break;
 		case 's':
 			{
 				int cmd=0, cc;

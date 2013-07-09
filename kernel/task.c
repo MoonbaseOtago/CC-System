@@ -878,7 +878,7 @@ uart_init() __naked
         mov	_U0BAUD, #59
         mov	_U0CSR, #0x80
         //U0UCR = 0x82;
-        mov	_U0UCR, #0x82
+        mov	_U0UCR, #0x86
         mov	_UTX0IF, #0
 	ret
 	__endasm;
@@ -904,7 +904,6 @@ main()
 	// sleep timer
 	//
 	ST2 = 0;
-
 #ifdef APP
 	{
 		extern code_hdr __code CODE_HEADER;

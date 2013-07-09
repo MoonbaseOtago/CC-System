@@ -165,16 +165,22 @@ get out, as fast as you can - these calls are made from task callout routines:
 		case APP_RCV_PACKET:
 			{
 				// these are defined in interface.h, locations may change
-				extern u8 __pdata rx_len;
-				extern u8 __pdata rx_status[2];
-				extern packet __xdata  * __pdata rx_packet;
+				extern u8 __data rx_len;
+				extern u8 __data rx_status[2];
+				extern packet __xdata  * __data rx_packet;
+				extern u8 __xdata  * __data rx_mac;
 				extern __bit rx_crypto;
+				extern __bit rx_broadcast;
 			
 				//
 				// rx_len bytes are stored pointed to by rx_packet;
 				//	if rx_crypto is set the packet was encrypted 
 				//	(and passed, bad crypto'd packets are discarded)
 				//	rx_status are the status bytes from the receiver
+				//
+				//  if rx_broadcast is true the packet was sent as a broadcast
+				//
+				//  rx_mac is the mac address of the packet sender
 				//
 				// when called the receiver is still running but can only buffer 
 				//	a packet or two (depends on length) so be quick
@@ -245,7 +251,7 @@ Keyboard controller: (Playa board)
 
 General:
 
-	void uart_init();	// set up uart 0 for output (only)
+	void uart_init();	// set up uart 0 for output (only) - 9600 baud
 	void putchar(char c);
 	void putstr(char __code *cp);
 	void puthex(unsigned char v);

@@ -30,14 +30,14 @@ keys.rel:	kernel/keys.c  include/rf.h include/task.h include/interface.h  includ
 suota.rel:	kernel/suota.c  include/rf.h include/task.h include/interface.h  include/suota.h
 	$(CC) $(CFLAGS) -c kernel/suota.c
 test.rel:	test.c  
-	$(CC) $(CFLAGS) -c kernel/test.c
+	$(CC) $(CFLAGS) -c test.c
 leds.rel:	kernel/leds.s  
 	$(AS)   -z -l -o leds.rel kernel/leds.s
 
 app.rel:	sample_app/app.c  include/interface.h 
 	$(CC) $(CFLAGS) -c sample_app/app.c
 clean:
-	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf
+	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf packet_test
 
 packet_test:	packet_interface.o packet_test.o
 	g++ -o packet_test packet_interface.o packet_test.o -lpthread -g

@@ -41,21 +41,28 @@ _CODE_HEADER:
 unsigned char __xdata rx_buff[RX_SIZE];
 unsigned char __xdata tx_buff[TX_SIZE];
 __xdata unsigned char *__data  rx_in = &rx_buff[0];
-__xdata unsigned char *__data  rx_out = &rx_buff[0];
+__xdata unsigned char *__pdata  rx_out = &rx_buff[0];
 unsigned char __data  rx_count=0;
-__xdata unsigned char *__data  tx_in = &tx_buff[0];
+__xdata unsigned char *__pdata  tx_in = &tx_buff[0];
 __xdata unsigned char *__data  tx_out = &tx_buff[0];
 unsigned char __data  tx_count=TX_SIZE;
 __bit tx_busy;
+void send_printf(char  __code *cp);
+void tx_p(u8 c);
 
 static void uart_rcv_thread(task __xdata*t);
 static __xdata task uart_rcv_task = {uart_rcv_thread,0,0,0};
+
+void ser_puthex(u8 v);
+void ser_putstr(char __code *cp);
+void ser_putc(char c);
 
 static void tx_intr() __naked 
 {
 	__asm;
 	push	PSW
 	push	ACC
+	clr	_UTX0IF
 	mov	a, _tx_count
 	cjne	a, #TX_SIZE, $0901
 
@@ -66,8 +73,8 @@ static void tx_intr() __naked
 		reti
 $0901:
 	push	_DPS
-	push	_DPH0
-	push	_DPL0
+	push	dpl
+	push	dph
 	mov	_DPS, #0
 	mov	dpl, _tx_out
 	mov	dph, _tx_out+1
@@ -79,8 +86,8 @@ $0901:
 	mov	_tx_out, dpl
 	mov	_tx_out+1, dph
 
-	pop	_DPL0
-	pop	_DPH0
+	pop	dph
+	pop	dpl
 	pop	_DPS
 	
 	pop	ACC
@@ -94,16 +101,17 @@ static void rx_intr() __naked
 	__asm;
 	push	PSW
 	push	ACC
+mov _U0DBUF, #'@'
 	mov	a, _rx_count
 	cjne	a, #RX_SIZE, $0001				// if _rx_count == RX_SIZE return
 		mov	a, _U0DBUF
 		sjmp	$0002
 $0001:		
+		mov	a, _U0DBUF				// *_rx_in++ = U0DBUF
 		push	_DPS
 		push	dpl
 		push	dph
 		mov	_DPS, #0
-		mov	a, _U0DBUF				// *_rx_in++ = U0DBUF
 		mov	dpl, _rx_in
 		mov	dph, _rx_in+1
 		movx	@dptr, a
@@ -145,30 +153,59 @@ $0002:
 	__endasm;
 }
 
-unsigned char __data rstate=0;
+unsigned char __pdata rstate=0;
 unsigned char __xdata keys[8][16];
 unsigned char __xdata r[256];
-unsigned char __data off;
-unsigned int  __data sum;
-unsigned char  __data cmd;
-unsigned char  __data rlen;
-unsigned char  __data cs0;
+unsigned char __pdata off;
+unsigned int  __pdata sum;
+unsigned char  __pdata cmd;
+unsigned char  __pdata rlen;
+unsigned char  __pdata cs0;
 unsigned char __data cur_key=0xff;
+
+void
+ser_putstr(char __code *cp)
+{
+	char c;
+	for (;;) {
+		c = *cp++;
+		if (!c)
+			break;
+		ser_putc(c);
+	}
+}
+
+void
+ser_puthex(u8 v)
+{
+	u8 x = (v>>4)&0xf;
+	if (x < 10) {
+		ser_putc(x+'0');
+	} else {
+		ser_putc(x+'a'-10);
+	}
+	x = v&0xf;
+	if (x < 10) {
+		ser_putc(x+'0');
+	} else {
+		ser_putc(x+'a'-10);
+	}
+}
 
 static void uart_rcv_thread(task __xdata*t)
 {
 	for (;;) {
-		unsigned char c, s;
+		unsigned char c;
 		if (rx_count == 0)
 			return;
-		s = IEN0;
-		IEN0 = 0;
+		IEN0 &= 0x7f;
 		c = *rx_out;
 		rx_out++;
 		if (rx_out == &rx_buff[RX_SIZE])
 			rx_out = &rx_buff[0];
 		rx_count--;
-		IEN0 = s;
+		IEN0 |= 0x80;
+//ser_putc('0'+rstate);ser_puthex(c);ser_putc(' ');ser_puthex(cmd);ser_putstr("\n\r");
 		switch (rstate) {
 		case 0: if (c != PKT_MAGIC_0)
 				break;
@@ -200,11 +237,17 @@ static void uart_rcv_thread(task __xdata*t)
 			rstate = 6;
 			break;
 		case 6: rstate = 0;
-			if ((sum&0xff) != c)
+ser_putc('A');
+			if ((sum&0xff) != cs0)
 				break;
-			if (((sum>>8)&0xff) != cs0)
+ser_putc('a'+cmd);
+			if (((sum>>8)&0xff) != c)
 				break;
 			switch (cmd) {
+			case PKT_CMD_PING:
+ser_putc('C');
+				send_printf("PING\n");
+				break;
 			case PKT_CMD_RCV_OFF:
 				rf_receive_off();
 				break;
@@ -252,6 +295,14 @@ static void uart_rcv_thread(task __xdata*t)
 }
 
 void
+tx_p(u8 c)
+{
+	*tx_in++ = c;
+	if (tx_in == &tx_buff[TX_SIZE])
+		tx_in = &tx_buff[0];
+}
+
+void
 send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u8 cmd)
 {
 	unsigned char xl = len+6+8;
@@ -260,23 +311,31 @@ send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u
 
 	if (xl > tx_count)
 		return;
-	*tx_in++ = PKT_MAGIC_0;
-	*tx_in++ = PKT_MAGIC_1;
-	*tx_in++ = cmd;
-	*tx_in++ = len+8;
+	tx_p(PKT_MAGIC_0);
+	tx_p(PKT_MAGIC_1);
+	tx_p(cmd);
+	tx_p(len+8);
 	l = 8;
-	while (l--) {
-		*tx_in++ = c = *mac++;
-		sum += c;
+	if (mac) {
+		while (l--) {
+			c = *mac++;
+			sum += c;
+			tx_p(c);
+		}
+	} else {
+		while (l--) {
+			tx_p(0xff);
+			sum += 0xff;
+		}
 	}
 	while (len--) {
-		*tx_in++ = c = *d++;
+		c = *d++;
 		sum += c;
+		tx_p(c);
 	}
-	*tx_in++ = sum;
-	*tx_in++ = sum>>8;
-	c = IEN0;
-	IEN0 = 0;
+	tx_p(sum);
+	tx_p(sum>>8);
+	IEN0 &= 0x7f;
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
@@ -284,7 +343,58 @@ send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u
 		tx_count++;
 		U0DBUF = *tx_out++;
 	}
-	IEN0 = c;
+	IEN0 |= 0x80;
+}
+
+void
+ser_putc(char c)
+{
+	if (!tx_count)
+		return;
+	tx_p(c);
+        IEN0 &= 0x7f;
+        tx_count--;
+        if (!tx_busy) {
+                tx_busy = 1;
+                tx_count++;
+                U0DBUF = *tx_out++;
+                IEN2 |= 1<<2;
+        }
+        IEN0 |= 0x80;
+}
+
+void
+send_printf(char  __code *cp)
+{
+	unsigned char len = strlen(cp)+1;
+	unsigned char xl = len+6;
+	unsigned int sum = PKT_CMD_PRINTF+len;
+	unsigned char c;
+
+	if (xl > tx_count)
+		return;
+	*tx_in++ = PKT_MAGIC_0;
+	*tx_in++ = PKT_MAGIC_1;
+	*tx_in++ = PKT_CMD_PRINTF;
+	*tx_in++ = len;
+	while (len--) {
+
+		*tx_in++ = c = *cp++;
+		sum += c;
+		if (!c)
+			break;
+	}
+	*tx_in++ = sum;
+	*tx_in++ = sum>>8;
+	IEN0 &= 0x7f;
+	tx_count -= xl;
+	if (!tx_busy) {
+		tx_busy = 1;
+		IEN2 |= 1<<2;
+		tx_count++;
+		U0DBUF = *tx_out++;
+	}
+	IEN0 |= 0x80;
 }
 
 static void
@@ -316,12 +426,14 @@ static unsigned int my_app(unsigned char op)
 	case APP_INIT:
 		// something to initialise variables - needs compiler hack
 		uart_setup();
+		send_printf("Startup\n");
 		break;
 	case APP_GET_MAC:
 		return 0;
 	case APP_GET_KEY:
 		return (unsigned int)&keys[cur_key][0];
 	case APP_RCV_PACKET:
+		send_rcv_packet((u8 * __xdata)rx_packet, rx_mac, rx_len, rx_crypto?PKT_CMD_RCV_PACKET_CRYPT:PKT_CMD_RCV_PACKET);
 		break;
 	}
 	return 0;

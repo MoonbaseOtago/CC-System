@@ -47,11 +47,11 @@ static unsigned int my_app(unsigned char op)
 {
 	switch (op) {
 	case APP_INIT:
+		uart_init();
+		putstr("Hello World\r\n");
 		// something to initialise variables - needs compiler hack
 		leds_off();
-		keys_on();
-		uart_init();
-		putstr("Hello World\n");
+		// keys_on();	// call to enable key scanning (messes with uart)
 		rf_set_channel(11);
 		break;
 	case APP_GET_MAC:
