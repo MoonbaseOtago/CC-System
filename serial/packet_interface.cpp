@@ -226,14 +226,17 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 	x[3] = len;
 	sum = (cmd&0xff) + (len&0xff);
 	::write(fd, &x[0], 4);
+for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
 	if (len) {
 		for (int i = 0; i < len; i++)
 			sum += data[i];
 		::write(fd, data, len);
+for (int i = 0; i < len; i++)printf("%02x ", data[i]);
 	}
 	x[0] = sum;
 	x[1] = sum>>8;
 	::write(fd, &x[0], 2);
+for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
 }
 
 void 

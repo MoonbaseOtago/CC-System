@@ -17,6 +17,7 @@ help()
 	printf("h: help\n");
 	printf("m: set mac - m a:b:c:d:e:f:g\n");
 	printf("o: toggle on/off (currently %s)\n", on?"on":"off");
+	printf("p: ping\n");
 	printf("s: send a packet - s cmd count\n");
 	printf("q: quit\n");
 }

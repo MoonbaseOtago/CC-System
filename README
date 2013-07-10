@@ -283,8 +283,6 @@ Notes about memory
 - __pdata - bytes  0x0000-0x00ff of sram
 - __xdata - bytes 0x0000-???? of sram
 
-the kernel uses register set 1 in interrupts, and set 0 in tasks - sets 2 and 3 are free for apps to use
-
 The compiler normally allocates memory (from all of these) and has already allocated some space for
 the kernel, short term we're compiling apps and the kernel together, later we'll have a mechanism
 so that an app can compile against a kernel's symbol table so that memory doesn't get double allocated 

@@ -83,6 +83,12 @@ $0901:
 	movx	a, @dptr
 	mov	_U0DBUF, a 
 	inc	dptr
+	mov	a, #_tx_buff+TX_SIZE		// if (rx_in == &rx_buff[RX_SIZE]) 
+	cjne	a, dpl, $0303
+	mov	a, #(_tx_buff+TX_SIZE)>>8
+	cjne	a, dph, $0303
+		mov	dptr, #_tx_buff			//	rx_in = &rx_buff[0];
+$0303:
 	mov	_tx_out, dpl
 	mov	_tx_out+1, dph
 
@@ -101,7 +107,7 @@ static void rx_intr() __naked
 	__asm;
 	push	PSW
 	push	ACC
-mov _U0DBUF, #'@'
+
 	mov	a, _rx_count
 	cjne	a, #RX_SIZE, $0001				// if _rx_count == RX_SIZE return
 		mov	a, _U0DBUF
@@ -131,11 +137,26 @@ $0003:
 			push	_DPL1
 			push	_DPH1
 	
-			setb	_RS0	// save regs
+			push	ar0
+			push	ar1
+			push	ar2
+			push	ar3
+			push	ar4
+			push	ar5
+			push	ar6
+			push	ar7
 			
 			mov	dptr, #_uart_rcv_task		// queue_task_0(&uart_rcv_task, 0);
 			lcall	_queue_task_0
 	
+			pop	ar7
+			pop	ar6
+			pop	ar5
+			pop	ar4
+			pop	ar3
+			pop	ar2
+			pop	ar1
+			pop	ar0
 			pop	_DPH1
 			pop	_DPL1
 			sjmp 	$0005
@@ -198,14 +219,13 @@ static void uart_rcv_thread(task __xdata*t)
 		unsigned char c;
 		if (rx_count == 0)
 			return;
-		IEN0 &= 0x7f;
+		EA = 0;
 		c = *rx_out;
 		rx_out++;
 		if (rx_out == &rx_buff[RX_SIZE])
 			rx_out = &rx_buff[0];
 		rx_count--;
-		IEN0 |= 0x80;
-//ser_putc('0'+rstate);ser_puthex(c);ser_putc(' ');ser_puthex(cmd);ser_putstr("\n\r");
+		EA = 1;
 		switch (rstate) {
 		case 0: if (c != PKT_MAGIC_0)
 				break;
@@ -237,15 +257,12 @@ static void uart_rcv_thread(task __xdata*t)
 			rstate = 6;
 			break;
 		case 6: rstate = 0;
-ser_putc('A');
 			if ((sum&0xff) != cs0)
 				break;
-ser_putc('a'+cmd);
 			if (((sum>>8)&0xff) != c)
 				break;
 			switch (cmd) {
 			case PKT_CMD_PING:
-ser_putc('C');
 				send_printf("PING\n");
 				break;
 			case PKT_CMD_RCV_OFF:
@@ -335,15 +352,17 @@ send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u
 	}
 	tx_p(sum);
 	tx_p(sum>>8);
-	IEN0 &= 0x7f;
+	EA = 0;
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
-		IEN2 |= 1<<2;
 		tx_count++;
 		U0DBUF = *tx_out++;
+		if (tx_out == &tx_buff[TX_SIZE])
+			tx_out = &tx_buff[0];
+		IEN2 |= 1<<2;
 	}
-	IEN0 |= 0x80;
+	EA = 1;
 }
 
 void
@@ -352,15 +371,17 @@ ser_putc(char c)
 	if (!tx_count)
 		return;
 	tx_p(c);
-        IEN0 &= 0x7f;
+        EA = 0;
         tx_count--;
         if (!tx_busy) {
                 tx_busy = 1;
                 tx_count++;
                 U0DBUF = *tx_out++;
+		if (tx_out == &tx_buff[TX_SIZE])
+			tx_out = &tx_buff[0];
                 IEN2 |= 1<<2;
         }
-        IEN0 |= 0x80;
+        EA |= 1;
 }
 
 void
@@ -373,33 +394,36 @@ send_printf(char  __code *cp)
 
 	if (xl > tx_count)
 		return;
-	*tx_in++ = PKT_MAGIC_0;
-	*tx_in++ = PKT_MAGIC_1;
-	*tx_in++ = PKT_CMD_PRINTF;
-	*tx_in++ = len;
+	tx_p(PKT_MAGIC_0);
+	tx_p(PKT_MAGIC_1);
+	tx_p(PKT_CMD_PRINTF);
+	tx_p(len);
 	while (len--) {
-
-		*tx_in++ = c = *cp++;
+		c = *cp++;
 		sum += c;
+		tx_p(c);
 		if (!c)
 			break;
 	}
-	*tx_in++ = sum;
-	*tx_in++ = sum>>8;
-	IEN0 &= 0x7f;
+	tx_p(sum);
+	tx_p(sum>>8);
+	EA = 0;
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
-		IEN2 |= 1<<2;
 		tx_count++;
 		U0DBUF = *tx_out++;
+		if (tx_out == &tx_buff[TX_SIZE])
+			tx_out = &tx_buff[0];
+		IEN2 |= 1<<2;
 	}
-	IEN0 |= 0x80;
+	EA = 1;
 }
 
 static void
 uart_setup()
 {
+	EA = 0;
 	uart_rx_0_vect = rx_intr;
 	uart_tx_0_vect = tx_intr;
 
@@ -410,13 +434,13 @@ uart_setup()
         U0CSR = 0x80;
         U0GCR = 0x08;
         U0BAUD = 59;
-        U0CSR = 0x80;
         //U0UCR = 0x82;
         U0UCR = 0x82; // flush
         UTX0IF = 0;
 
-	U0CSR |= 0x40;	// enable receiver
+        U0CSR = 0xdc;
 	IEN0 |= 1<<2;
+	EA = 1;
 }
 
 

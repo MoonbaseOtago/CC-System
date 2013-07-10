@@ -371,10 +371,25 @@ t1_isr()  __interrupt(9) __naked
 	push	_DPH1
 	push	_DPS
 
-	setb	_RS0	// save regs
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
 	mov	_DPS, #0
 	mov	dptr, #_key_task
 	lcall	_queue_task_0		//	queue_task(&key_task, 0);
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
 	pop	_DPS
 	pop	_DPH1
 	pop	_DPL1
