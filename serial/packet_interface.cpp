@@ -226,17 +226,17 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 	x[3] = len;
 	sum = (cmd&0xff) + (len&0xff);
 	::write(fd, &x[0], 4);
-for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
+//for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
 	if (len) {
 		for (int i = 0; i < len; i++)
 			sum += data[i];
 		::write(fd, data, len);
-for (int i = 0; i < len; i++)printf("%02x ", data[i]);
+//for (int i = 0; i < len; i++)printf("%02x ", data[i]);
 	}
 	x[0] = sum;
 	x[1] = sum>>8;
 	::write(fd, &x[0], 2);
-for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
+//for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
 }
 
 void 
@@ -270,9 +270,7 @@ rf_interface::rf_thread()
 			}
 			continue;
 		}
-printf("read %d bytes\n", l);
 		for (int i = 0; i < l; i++) {
-printf("state %d char 0x%02x\n", state, b[i]);
 			switch (state) {
 			case 0: if (b[i] == PKT_MAGIC_0)
 					state = 1;
@@ -307,7 +305,6 @@ printf("state %d char 0x%02x\n", state, b[i]);
 			case 6:	sum2 |= b[i]<<8;
 				state = 0;
 				sum &= 0xffff;
-printf("sums = 0x%04x 0x%04x\n", sum, sum2);
 				if (sum != sum2)
 					break;
 

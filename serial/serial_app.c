@@ -46,7 +46,7 @@ unsigned char __data  rx_count=0;
 __xdata unsigned char *__pdata  tx_in = &tx_buff[0];
 __xdata unsigned char *__data  tx_out = &tx_buff[0];
 unsigned char __data  tx_count=TX_SIZE;
-__bit tx_busy;
+__bit tx_busy, rcv_busy;
 void send_printf(char  __code *cp);
 void tx_p(u8 c);
 
@@ -108,69 +108,67 @@ static void rx_intr() __naked
 	push	PSW
 	push	ACC
 
+$1101:
+	mov	a, _U0CSR
+	jb	_ACC_2, $1102	// U0CSR.RX_BYTE
+		pop	acc
+		pop 	PSW
+		reti
+$1102:
 	mov	a, _rx_count
 	cjne	a, #RX_SIZE, $0001				// if _rx_count == RX_SIZE return
 		mov	a, _U0DBUF
-		sjmp	$0002
+		sjmp	$1101
 $0001:		
-		mov	a, _U0DBUF				// *_rx_in++ = U0DBUF
-		push	_DPS
-		push	dpl
-		push	dph
-		mov	_DPS, #0
-		mov	dpl, _rx_in
-		mov	dph, _rx_in+1
-		movx	@dptr, a
-		inc	dptr
-		mov	a, #_rx_buff+RX_SIZE		// if (rx_in == &rx_buff[RX_SIZE]) 
-		cjne	a, dpl, $0003
-		mov	a, #(_rx_buff+RX_SIZE)>>8
-		cjne	a, dph, $0003
-			mov	dptr, #_rx_buff			//	rx_in = &rx_buff[0];
+	mov	a, _U0DBUF				// *_rx_in++ = U0DBUF
+	push	_DPS
+	push	dpl
+	push	dph
+	mov	_DPS, #0
+	mov	dpl, _rx_in
+	mov	dph, _rx_in+1
+	movx	@dptr, a
+	inc	dptr
+	mov	a, #_rx_buff+RX_SIZE		// if (rx_in == &rx_buff[RX_SIZE]) 
+	cjne	a, dpl, $0003
+	mov	a, #(_rx_buff+RX_SIZE)>>8
+	cjne	a, dph, $0003
+		mov	dptr, #_rx_buff			//	rx_in = &rx_buff[0];
 $0003:	
-		mov	_rx_in, dpl
-		mov	_rx_in+1, dph
-		mov 	a, _rx_count				// if (rx_count++ == 0)
-		jz	$0004
-			inc	a
-			mov 	_rx_count, a
-			push	_DPL1
-			push	_DPH1
+	mov	_rx_in, dpl
+	mov	_rx_in+1, dph
+	inc	_rx_count
+	jb	_rcv_busy, $0005
+		setb	_rcv_busy
+		push	_DPL1
+		push	_DPH1
 	
-			push	ar0
-			push	ar1
-			push	ar2
-			push	ar3
-			push	ar4
-			push	ar5
-			push	ar6
-			push	ar7
+		push	ar0
+		push	ar1
+		push	ar2
+		push	ar3
+		push	ar4
+		push	ar5
+		push	ar6
+		push	ar7
 			
-			mov	dptr, #_uart_rcv_task		// queue_task_0(&uart_rcv_task, 0);
-			lcall	_queue_task_0
+		mov	dptr, #_uart_rcv_task		// queue_task_0(&uart_rcv_task, 0);
+		lcall	_queue_task_0
 	
-			pop	ar7
-			pop	ar6
-			pop	ar5
-			pop	ar4
-			pop	ar3
-			pop	ar2
-			pop	ar1
-			pop	ar0
-			pop	_DPH1
-			pop	_DPL1
-			sjmp 	$0005
-$0004:
-			inc	a
-			mov 	_rx_count, a
-
-$0005:		pop	dph
-		pop	dpl
-		pop	_DPS
-$0002:
-	pop	acc
-	pop 	PSW
-	reti
+		pop	ar7
+		pop	ar6
+		pop	ar5
+		pop	ar4
+		pop	ar3
+		pop	ar2
+		pop	ar1
+		pop	ar0
+		pop	_DPH1
+		pop	_DPL1
+$0005:	pop	dph
+	pop	dpl
+	pop	_DPS
+	sjmp	$1101
 	__endasm;
 }
 
@@ -217,15 +215,18 @@ static void uart_rcv_thread(task __xdata*t)
 {
 	for (;;) {
 		unsigned char c;
-		if (rx_count == 0)
-			return;
 		EA = 0;
+		if (rx_count == 0) {
+			rcv_busy = 0;
+			EA = 1;
+			return;
+		}
+		rx_count--;
 		c = *rx_out;
+		EA = 1;
 		rx_out++;
 		if (rx_out == &rx_buff[RX_SIZE])
 			rx_out = &rx_buff[0];
-		rx_count--;
-		EA = 1;
 		switch (rstate) {
 		case 0: if (c != PKT_MAGIC_0)
 				break;
@@ -381,7 +382,7 @@ ser_putc(char c)
 			tx_out = &tx_buff[0];
                 IEN2 |= 1<<2;
         }
-        EA |= 1;
+        EA = 1;
 }
 
 void
@@ -436,9 +437,8 @@ uart_setup()
         U0BAUD = 59;
         //U0UCR = 0x82;
         U0UCR = 0x82; // flush
-        UTX0IF = 0;
-
         U0CSR = 0xdc;
+        UTX0IF = 0;
 	IEN0 |= 1<<2;
 	EA = 1;
 }
@@ -451,6 +451,8 @@ static unsigned int my_app(unsigned char op)
 		// something to initialise variables - needs compiler hack
 		uart_setup();
 		send_printf("Startup\n");
+		P2DIR |= 1;
+		P2 |= 1;
 		break;
 	case APP_GET_MAC:
 		return 0;
