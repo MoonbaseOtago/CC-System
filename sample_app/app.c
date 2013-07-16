@@ -59,9 +59,14 @@ static unsigned int my_app(unsigned char op)
 	case APP_GET_KEY:
 		return (unsigned int)&ckey[0];
 	case APP_RCV_PACKET:
-		if (rx_packet->hops > 0) {	// forward  packets
-			u8 p0 = rx_packet->uniq[0];
-			u8 p1 = rx_packet->uniq[1];
+		//
+		// for playa broadcast protocol first 3 bytes are of type broadcast_filter
+		//
+		if (rx_len < 3)
+			return;
+		if (rx_packet->data[0] > 0) {	// forward  packets
+			u8 p0 = rx_packet->data[1];	// id
+			u8 p1 = rx_packet->data[2];
 			u8 __pdata *ph = &uniq_filter[0];
 			u8 c;
 			if (!rx_crypto)	// don't forward unverified packets
@@ -77,7 +82,7 @@ static unsigned int my_app(unsigned char op)
 				}
 				c--;
 			}
-			rx_packet->hops--;
+			rx_packet->data[0]--;
 			rf_send(rx_packet, rx_len, 1, 0);
 			ph = &uniq_filter[uniq_index];
 			*ph++ = p0;

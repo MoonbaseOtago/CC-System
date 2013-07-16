@@ -60,7 +60,11 @@ rf_set_key(u8 __xdata * key)
 void
 rf_set_mac(u8 __xdata *m)
 {
-	memcpy(mac, m, 8);
+	u8 i;
+	for (i = 0; i < 6; i++)
+		mac[i] = m[i];
+	mac[6] = rf_id[0] = m[6];
+	mac[7] = rf_id[1] = m[7];
 }
 
 void

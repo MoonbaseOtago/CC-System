@@ -37,6 +37,7 @@
 #define PKT_CMD_SEND_PACKET_MAC		0x08
 #define PKT_CMD_PRINTF			0x09
 #define PKT_CMD_PING			0x0a
+#define PKT_CMD_SET_SUOTA_VERSION	0x0b
 #define PKT_CMD_SEND_PACKET_CRYPT	0x20	// 0x20->0x27 depending on key
 #define PKT_CMD_SEND_PACKET_CRYPT_MAC	0x40	// 0x20->0x27 depending on key
 #define PKT_CMD_RCV_PACKET_CRYPT	0x60	// only 1 key for now
@@ -79,6 +80,10 @@
 //	PKT_CMD_SEND_PACKET*
 //		2-N-1:	data
 //
+//	PKT_CMD_SET_SUOTA_VERSION
+//		2	arch
+//		2-4	version
+//
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,6 +95,9 @@ typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *
 extern rf_handle rf_open(const char *serial_device, rf_rcv rcv_callback);
 extern void rf_close(rf_handle handle);
 #define RF_NO_KEY (-1)
+extern int rf_command(rf_handle handle, const char *cmd);
+extern int rf_initialise(rf_handle handle, const char *file);
+inline int rf_initialize(rf_handle handle, const char *file) { return rf_initialize(handle, file); }
 extern void rf_on(rf_handle handle, int key);
 extern void rf_off(rf_handle handle);
 extern void rf_set_auto_dump(rf_handle handle, FILE *output);
@@ -98,6 +106,8 @@ extern void rf_set_key(rf_handle handle, int k, const unsigned char *key);
 extern void rf_set_mac(rf_handle handle, const unsigned char *mac);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
+extern void rf_set_suota_version(rf_handle handle, unsigned char arch, unsigned long version);
+extern int rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned long version, const char *file);
 
 #ifdef __cplusplus
 
@@ -115,6 +125,11 @@ public:
 	void send(const unsigned char *mac, const unsigned char *data, int len);
 	void send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len);
 	int opened_ok() { return fd >= 0; }
+	int initialise(const char *file);
+	int initialize(const char *file) { return initialise(file);} 
+	int command(const char *cmd) { return command(cmd, 0, 0); }
+	void set_suota_version(unsigned char arch, unsigned long version);
+	int set_suota_upload(int key, unsigned char arch, unsigned long version, const char *file);
 private:
 	void	send_packet(int cmd, int, const unsigned char *);
 	static void *thread(void *);
@@ -126,6 +141,18 @@ private:
 	pthread_mutex_t	mutex;
 	pthread_cond_t	cond;
 	pthread_t	tid;
+	int command(const char *cmd, const char *file, int line);
+	typedef struct suota_upload {
+		struct suota_upload *next;
+		unsigned char key;
+		unsigned char arch;
+		unsigned long version;
+		unsigned char *data;
+		unsigned long len;
+	
+	} suota_upload;
+	unsigned char rf_id[2];
+	suota_upload	*suota_list;
 
 };
 

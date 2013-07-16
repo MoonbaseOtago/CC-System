@@ -40,7 +40,7 @@ static void suota_timeout(task __xdata * t);
 
 __xdata task suota_task = {suota_timeout,0,0,0};
 
-__code const code_hdr dummy = {0xffffffff, THIS_ARCH, {0,0,0}, 0};
+__code const code_hdr dummy = {{0xff, 0xff, 0xff, 0xff}, THIS_ARCH, {0,0,0}, {0, 0}};
 
 __code code_hdr *__xdata current_code;
 __code code_hdr * __xdata next_code;
@@ -50,7 +50,7 @@ static suota_resp *__xdata rp;
 #define BASE0 (10*1024)			// we assume the 5lSBs  of these are 0
 #define BASE1 (BASE0+11*1024)
 static u8
-crc_check(code_hdr __code* cp)
+crc_check(code_hdr __code* cp) __naked
 {
 	__asm;
 	mov	r4, #0xff	// lsb
@@ -177,21 +177,26 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 		    memcmp(&rq->id[0], &rf_id[0], 2) != 0) 
 			return;
 		pkt->type = P_TYPE_SUOTA_RESP;
-		offset = rq->offset;
-		rp->total_len = current_code->len+4;
-		if (rp->total_len > offset) 
-			memcpy(&rp->data[0], &((u8*)current_code)[offset], sizeof(rp->data));
+		offset = *(unsigned int __xdata *)&rq->offset[0];
+		{
+			unsigned int l;
+			*(unsigned int __xdata *)&rp->total_len[0] = l = (*(unsigned int __xdata *)&current_code->len)+4;
+			if (l > offset) 
+				memcpy(&rp->data[0], &((u8*)current_code)[offset], sizeof(rp->data));
+		}
 		rf_send(pkt, sizeof(packet)-1+sizeof(suota_resp), 1, 0);
 	} else
 	if (pkt->type == P_TYPE_SUOTA_RESP) {
 		unsigned int len;
+		unsigned int offset;
 		rq = (suota_req __xdata *)&pkt->data[0];
 		rp = (suota_resp __xdata *)&pkt->data[0];
-		if (!suota_state || memcpy(&rp->version[0], &suota_version[0], 3) != 0 || rp->offset != suota_offset) 
+		offset = *(unsigned int __xdata *)&rq->offset[0];
+		if (!suota_state || memcpy(&rp->version[0], &suota_version[0], 3) != 0 || offset != suota_offset) 
 			return;
 		cancel_task(&suota_task);
 		pkt->type = P_TYPE_SUOTA_REQ; 
-		len = rp->total_len-rp->offset;
+		len = (*(unsigned int __xdata *)&rp->total_len[0])-offset;
 		if (len > 0) {
 			unsigned int addr = (unsigned int)next_code;
 			unsigned char __xdata* pp;
@@ -200,7 +205,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 			if (len > sizeof(rp->data))
 				len = sizeof(rp->data);
 			
-			if (rp->offset == 0) {	// skip over CRC/version we'll do it later - helps us recover from evil
+			if (offset == 0) {	// skip over CRC/version we'll do it later - helps us recover from evil
 				memcpy(&suota_crc, &pkt->data[0], 4); 
 				i = 8;
 				EA = 0; 
@@ -212,7 +217,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 				pp = &pkt->data[8];
 			} else {
 				i = 0;
-				addr += rp->offset;
+				addr += offset;
 				if (!(addr&0x3ff)) { // 1k boundary?
 					EA = 0; 
 					while (FCTL & 0x80); //  FCTL.BUSY 
@@ -236,8 +241,10 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 			}
 			EA = 1;
 		}
-		suota_offset = rp->offset = rp->offset+sizeof(rp->data);
-		if (rp->offset >= rp->total_len) {
+		offset = offset+sizeof(rp->data);
+		suota_offset = offset;
+		*(unsigned int __xdata *)&rp->offset[0] = offset;
+		if (offset >= *(unsigned int __xdata *)&rp->total_len[0]) {
 			u8 v;
 
 			EA=0;
@@ -262,7 +269,7 @@ static void suota_request()
 	rq = (suota_req __xdata *)&pkt->data[0];
 	memcpy(&rq->version[0], &suota_version[0], 3);
 	rq->arch = THIS_ARCH;
-        rq->offset = suota_offset;
+        *(unsigned int __xdata *)&rq->offset[0] = suota_offset;
 	pkt->type = P_TYPE_SUOTA_REQ;
 	rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), 1, 0);
 	queue_task(&suota_task, 255);

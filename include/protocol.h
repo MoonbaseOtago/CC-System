@@ -16,29 +16,36 @@
 // License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-#ifndef __suota_h_
-#define __suota_h_
+#ifndef __protocol_h
+#define __protocol_h
 
-typedef struct suota_req {
-	unsigned char arch;
-	unsigned char version[3];
-	unsigned char offset[2];
-	unsigned char id[2];
-} suota_req;
+typedef struct packet {
+	unsigned char	type;
+	unsigned char	id[2];
+	unsigned char	arch;
+	unsigned char	version[3];
+	unsigned char	data[1];
+} packet;
 
-typedef struct suota_resp {
-	unsigned char arch;
-	unsigned char version[3];
-	unsigned char offset[2];
-	unsigned char total_len[2];
-	unsigned char data[64];
-} suota_resp;
+typedef struct broadcast_filter {	// for playa protocol this is used as the first 3 bytes of every packet
+	unsigned char	hops;
+	unsigned char	uniq[2];	// uniq filter
+} broadcast_filter;
 
-#ifndef __cplusplus
-void incoming_suota_packet(packet __xdata* p, u8 len);
-u8 incoming_suota_version(packet __xdata *p);
-void suota_setup();
-extern code_hdr  __code * __xdata current_code;
-#endif
+#define P_TYPE_NOP		0
+#define P_TYPE_SUOTA_REQ	1
+#define P_TYPE_SUOTA_RESP	2
+
+#define P_TYPE_OTHERS		0x40 // writing your own code, want to add your own code
+			     	     // allocate something above here
+
+#define THIS_ARCH	1	// initial CC2533
+typedef struct code_hdr {
+        unsigned char    crc[4];         
+	unsigned char    arch;
+        unsigned char    version[3];
+        unsigned char    len[2];
+        unsigned char    data[1];
+} code_hdr;
 
 #endif

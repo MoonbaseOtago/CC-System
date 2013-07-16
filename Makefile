@@ -40,11 +40,11 @@ clean:
 	rm -f *.rel *.map *.lst *.hex *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf packet_test
 
 packet_test:	packet_interface.o packet_test.o
-	g++ -o packet_test packet_interface.o packet_test.o -lpthread -g
+	g++ -o packet_test packet_interface.o packet_test.o -lpthread -g -lz
 
 
 packet_test.o:	serial/packet_interface.h serial/test.cpp
-	g++ -c serial/test.cpp -o packet_test.o -I include -I serial -g
+	g++ -c serial/test.cpp -o packet_test.o -I include -I serial -g 
 packet_interface.o:	serial/packet_interface.h serial/packet_interface.cpp
 	g++ -c serial/packet_interface.cpp -I include -I serial -g
 

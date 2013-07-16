@@ -3,6 +3,7 @@
 //
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "packet_interface.h"
 
 bool on=0;
@@ -14,11 +15,22 @@ unsigned char xx[64];
 void
 help()
 {
+	printf("a: autodump\n");
+	printf("c: set rf channel 11-26             - c channel\n");
 	printf("h: help\n");
-	printf("m: set mac - m a:b:c:d:e:f:g\n");
-	printf("o: toggle on/off (currently %s)\n", on?"on":"off");
+	printf("i: initialise file\n");
+	printf("m: set mac                          - m a:b:c:d:e:f:g\n");
+	printf("k: on, set key                      - k key-num\n");
+	printf("K: load key (16 hex bytes)          - K key-num value \n");
+	printf("O: on, key 0\n");
+	printf("o: off\n");
 	printf("p: ping\n");
-	printf("s: send a packet - s cmd count\n");
+	printf("s: send a broadcast packet          - s * cmd count\n");
+	printf("s: send a directed packet           - s a:b:c:d:e:f:g cmd count\n");
+	printf("!: send a broadcast crypto packet   - ! key-num * cmd count\n");
+	printf("!: send a directed crypto packet    - ! key-num a:b:c:d:e:f:g cmd count\n");
+	printf("S: suota architecture for broadcast - S arch version\n");
+	printf("u: suota update listener            - u arch version file\n");
 	printf("q: quit\n");
 }
 
@@ -27,6 +39,7 @@ main(int argc, char **argv)
 {
 	rf_interface *rfp;
 	const char *tp;
+	char b[256];
 
 	if (argc < 2) {
 		tp = "/dev/ttyUSB0";
@@ -40,115 +53,45 @@ main(int argc, char **argv)
 	}
 	help();
 	for (;;) {
-		int c = getchar();
-		if (c < 0)
+		char b[256];
+		int c;
+		char *cp;
+		int i;
+
+		printf("> ");
+		if (!fgets(&b[0], sizeof(b), stdin))
 			break;
+		i = strlen(b);
+		if (i > 0 && b[i-1] == '\n')
+			b[i-1] = 0;
+		cp = &b[0];
+		while (*cp == ' ' || *cp == '\t')
+			cp++;
+		if (!cp)
+			break;
+		c = *cp;
 		switch (c) {
 		case 'q':
 			goto quit;
+		case 'i':
+			cp++;
+			while (*cp == ' ' || *cp =='\t')
+				cp++;
+			i = strlen(cp);
+			while (i > 0 && (cp[i-1] == '\n' || cp[i-1] == ' ' || cp[i-1] == '\t')) {
+				i--;
+				cp[i] = 0;
+			}
+			if (!cp)
+				break;
+			rfp->initialise(cp);
+			break;
 		case '?':
 		case 'h':	
 			help();
 			break;
-		case 'm':
-			{
-				int cc;
-				int o = 0;
-				int v=0;
-				for (;;) {
-					cc = getchar();
-					if (cc != ' ')
-						break;
-				}
-				for (;;) {
-					if (cc < 0 || cc == '\n') {
-						if (o == 0 && v == 0) {
-							mac_set = 0;
-						} else {
-							if (o < sizeof(mac))
-								mac[o] = v;
-							mac_set = 1;
-						}
-						break;
-					}
-					if (cc == ':') {
-						if (o < sizeof(mac))
-							mac[o] = v;
-						o++;
-						if (o >= sizeof(mac))
-							break;
-					}
-					if (o >= '0' && o <= '9') {
-						v = (v<<4)|(cc-'0');
-					} else
-					if (o >= 'a' && o <= 'f') {
-						v = (v<<4)|(cc-'a'+10);
-					} else
-					if (o >= 'A' && o <= 'F') {
-						v = (v<<4)|(cc-'A'+10);
-					} 
-					cc = getchar();
-				}
-				for (;;) {
-					if (cc < 0 || cc == '\n') 
-						break;
-					cc = getchar();
-				}
-			}
-			break;
-			
-		case 'o':
-			if (on) {
-				rfp->off();
-				on = 0;
-			} else {
-				rfp->on(key);
-				on = 1;
-			}
-			break;
-		case 'p':
-			rfp->ping();
-			break;
-		case 's':
-			{
-				int cmd=0, cc;
-				int len = 0, n=0;
-
-				for (;;) {
-					cc = getchar();
-					if (cc < 0 || cc == '\n')
-						break;
-					if (cc == ' ') {
-						if (n) {
-			xit:
-							for (;;) {
-								cc = getchar();
-								if (cc < 0 || cc == '\n')
-									break;
-							}
-							break;
-						}
-						n = 1;
-						continue;
-					}
-					if (cc < '0' || cc > '9')
-						goto xit;
-					if (n) {
-						len = len*10 + (len-cc);
-					} else {
-						cmd = cmd*10 + (len-cc);
-					}
-				}
-
-				if (len == 0)
-					len = 1;
-				if (len > sizeof(xx))
-					len = sizeof(xx);
-				xx[0] = cmd;
-				for (int i = 1; i < len; i++)
-					xx[i] = rand();
-				rfp->send(mac_set?&mac[0]:0, &xx[0], len);
-			}
+		default:
+			rfp->command(cp);
 			break;
 		}
 	}

@@ -22,23 +22,7 @@
 #include <mcs51reg.h>
 #include <cc2530.h>
 #include "task.h"
-
-typedef struct packet {
-	u8	type;
-	u8	id[2];
-	u8	arch;
-	u8	version[3];
-	u8	hops;
-	u8	uniq[2];	// uniq filter
-	u8	data[1];
-} packet;
-
-#define P_TYPE_NOP		0
-#define P_TYPE_SUOTA_REQ	1
-#define P_TYPE_SUOTA_RESP	2
-
-#define P_TYPE_OTHERS		0x40 // writing your own code, want to add your own code
-			     	     // allocate something above here
+#include "protocol.h"
 
 extern unsigned int (* __data x_app) (u8 v);
 #define app (*x_app)
@@ -60,15 +44,6 @@ extern __bit key_down;
 #define		KEY_O		1
 #define		KEY_LEFT	2
 #define		KEY_RIGHT	3
-
-#define THIS_ARCH	1	// initial CC2533
-typedef struct code_hdr {
-        unsigned long    crc;         
-	unsigned char    arch;
-        unsigned char    version[3];
-        unsigned int     len;
-        unsigned char	 data[1];
-} code_hdr;
 
 // call backs
 extern void leds_rgb(unsigned char * __xdata);
