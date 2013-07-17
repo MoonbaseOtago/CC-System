@@ -383,7 +383,8 @@ void rf_isr()  __interrupt(16) __naked
 			inc	dptr
 			djnz	r1, 0004$
 		mov	_rx_status, _RFD		//		rx_status[0] = RFD;
-		mov	_rx_status+1, _RFD		//		rx_status[1] = RFD;
+		mov	a, _RFD		//		rx_status[1] = RFD;
+		mov	_rx_status+1, a	//		rx_status[1] = RFD;
 		jnb	acc.7, 0005$	//		if ((rx_status[1]&0x80)) { 	// CRC check
 			setb    _rx_busy	//		rx_busy = 1;
 			push	ar2
