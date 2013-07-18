@@ -285,17 +285,17 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 	x[3] = len;
 	sum = (cmd&0xff) + (len&0xff);
 	::write(fd, &x[0], 4);
-//for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
+for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
 	if (len) {
 		for (int i = 0; i < len; i++)
 			sum += data[i];
 		::write(fd, data, len);
-//for (int i = 0; i < len; i++)printf("%02x ", data[i]);
+for (int i = 0; i < len; i++)printf("%02x ", data[i]);
 	}
 	x[0] = sum;
 	x[1] = sum>>8;
 	::write(fd, &x[0], 2);
-//for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
+for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
 }
 
 void 
@@ -316,13 +316,17 @@ rf_interface::rf_thread()
 			break;
 		}
 		pthread_mutex_unlock(&mutex);
-		struct pollfd fds = {fd, 0xffff};
-		int l = poll(&fds, 1, -1);
-		if (l >= 0)
-			l = read(fd, &b[0], sizeof(b));
+		struct pollfd fds = {fd, POLLIN|POLLPRI|POLLRDHUP|POLLHUP|POLLNVAL, 0};
+		int l = poll(&fds, 1, 5);
+		if (l == 0) {
+			pthread_mutex_lock(&mutex);
+			continue;
+		}
+		if (l > 0) 
+			l = ::read(fd, &b[0], sizeof(b));
 		pthread_mutex_lock(&mutex);
 		if (l < 0) {
-			if (errno != EINTR) {
+			if (errno != EINTR && errno != EAGAIN) {
 				while (!shutdown)
 					pthread_cond_wait(&cond, &mutex);
 				shutdown = 0;
@@ -333,9 +337,13 @@ rf_interface::rf_thread()
 			continue;
 		}
 		for (int i = 0; i < l; i++) {
+//fprintf(stderr, "b[%d/%d]: %02x\n", i, l, b[i]);
 			switch (state) {
-			case 0: if (b[i] == PKT_MAGIC_0)
+			case 0: if (b[i] == PKT_MAGIC_0) {
 					state = 1;
+				} else {
+					fprintf(stderr, "U: %02x '%c'\n", b[i], b[i]);
+				}
 				break;
 			case 1: if (b[i] == PKT_MAGIC_1)
 					state = 2;
@@ -378,6 +386,10 @@ rf_interface::rf_thread()
 					fprintf(stderr, "PRINT: %s", (char *)&data[0]);
 					break;
 				case PKT_CMD_RCV_PACKET:
+					if (callback) 
+						(*callback)(this, 0, &data[0], &data[8], len-8);
+					goto log;
+				case PKT_CMD_RCV_PACKET_CRYPT:
 					if (suota_list && ((packet *)&data[8])->type == P_TYPE_SUOTA_REQ) {
 						packet *p = (packet *)&data[8];
 						suota_req *srp = (suota_req*)&p->data[0];
@@ -417,13 +429,8 @@ rf_interface::rf_thread()
 						
 					}
 					if (callback) 
-						(*callback)(this, 0, &data[0], &data[8], len-8);
-					goto log;
-				case PKT_CMD_RCV_PACKET_CRYPT:
-					if (callback) 
 						(*callback)(this, 1, &data[0], &data[8], len-8);
 log:					if (auto_dump) {
-						pthread_mutex_lock(&mutex);
 						if (auto_dump) {
 							fprintf(auto_dump, "rf %02x%02x%02x%02x:%02x%02x%02x%02x:: ", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
 							for (int j = 0; j < len; j++) {
@@ -433,7 +440,6 @@ log:					if (auto_dump) {
 							}
 							fprintf(auto_dump, "\n");
 						}
-						pthread_mutex_unlock(&mutex);
 					}
 					break;
 				}
@@ -529,6 +535,8 @@ rf_interface::command(const char *cc, const char *file, int line)
 	while (*cp == ' ' || *cp == '\t')
 		cp++;
 	switch (c) {
+	case 0:
+		return res;
 	case 'o':	
 		off();
 		break;
@@ -539,7 +547,7 @@ rf_interface::command(const char *cc, const char *file, int line)
 		ping();
 		break;
 	case 'a':
-		set_auto_dump(stderr);
+		set_auto_dump(*cp == '-'?0:stderr);
 		break;
 	case 'c':
 		i = strtol(cp, 0, 0);
@@ -739,13 +747,13 @@ rf_interface::command(const char *cc, const char *file, int line)
 			while (*cp == ' ' || *cp == '\t')
 				cp++;
 			char x = *cp;
-			if (x >= '0' || x <= '9') {
+			if (x >= '0' && x <= '9') {
 				v = x-'0';
 			} else
-			if (x >= 'a' || x <= 'f') {
+			if (x >= 'a' && x <= 'f') {
 				v = x-'a'+10;
 			} else
-			if (x >= 'A' || x <= 'F') {
+			if (x >= 'A' && x <= 'F') {
 				v = x-'A'+10;
 			} else {
 				fprintf(stderr, "%s: invalid packet data '%s'\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp);
@@ -754,14 +762,14 @@ rf_interface::command(const char *cc, const char *file, int line)
 			}
 			cp++;
 			x = *cp++;
-			if (x >= '0' || x <= '9') {
-				v = (v<<4)+x-'0';
+			if (x >= '0' && x <= '9') {
+				v = (v<<4)+(x-'0');
 			} else
-			if (x >= 'a' || x <= 'f') {
-				v = (v<<4)+x-'a'+10;
+			if (x >= 'a' && x <= 'f') {
+				v = (v<<4)+(x-'a'+10);
 			} else
-			if (x >= 'A' || x <= 'F') {
-				v = (v<<4)+x-'A'+10;
+			if (x >= 'A' && x <= 'F') {
+				v = (v<<4)+(x-'A'+10);
 			} else {
 				cp--;
 			}

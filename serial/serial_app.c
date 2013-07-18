@@ -175,9 +175,9 @@ $0005:	pop	dph
 unsigned char __pdata rstate=0;
 unsigned char __xdata keys[8][16];
 unsigned char __xdata r[256];
-unsigned char __pdata off;
-unsigned int  __pdata sum;
-unsigned char  __pdata cmd;
+unsigned char __pdata roff;
+unsigned int  __pdata rsum;
+unsigned char  __pdata rcmd;
 unsigned char  __pdata rlen;
 unsigned char  __pdata cs0;
 unsigned char __data cur_key=0xff;
@@ -236,33 +236,33 @@ static void uart_rcv_thread(task __xdata*t)
 				break;
 			rstate = 2;
 			break;
-		case 2: cmd = c;
-			sum = c;
+		case 2: rcmd = c;
+			rsum = c;
 			rstate = 3;
 			break;
 		case 3: rlen = c;
-			sum += c;
+			rsum += c;
 			if (rlen != 0) {
-				off = 0;
+				roff = 0;
 				rstate = 4;
 			} else {
 				rstate = 5;
 			}
 			break;
-		case 4:	r[off++] = c;
-			sum += c;
-			if (off >= rlen)
+		case 4:	r[roff++] = c;
+			rsum += c;
+			if (roff >= rlen)
 				rstate = 5;
 			break;
 		case 5:	cs0 = c;
 			rstate = 6;
 			break;
 		case 6: rstate = 0;
-			if ((sum&0xff) != cs0)
+			if ((rsum&0xff) != cs0)
 				break;
-			if (((sum>>8)&0xff) != c)
+			if (((rsum>>8)&0xff) != c)
 				break;
-			switch (cmd) {
+			switch (rcmd) {
 			case PKT_CMD_PING:
 				send_printf("PING\n");
 				break;
@@ -290,14 +290,16 @@ static void uart_rcv_thread(task __xdata*t)
 				rf_send((packet __xdata*)&r[8], rlen-8, 0, &r[0]);
 				break;
 			default:
-				if (cmd >= PKT_CMD_SEND_PACKET_CRYPT && cmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {					     int t = cmd-PKT_CMD_SEND_PACKET_CRYPT;
+				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT && rcmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {
+					int t = rcmd-PKT_CMD_SEND_PACKET_CRYPT;
 					if (cur_key != t) {
 						cur_key = t;
 						rf_set_key(&keys[t][0]);
 					}
 					rf_send((packet __xdata*)&r[0], rlen, 1, 0);
 				} else
-				if (cmd >= PKT_CMD_SEND_PACKET_CRYPT_MAC && cmd < (PKT_CMD_SEND_PACKET_CRYPT_MAC+8)) {					     int t = cmd-PKT_CMD_SEND_PACKET_CRYPT;
+				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT_MAC && rcmd < (PKT_CMD_SEND_PACKET_CRYPT_MAC+8)) {					   
+					int t = rcmd-PKT_CMD_SEND_PACKET_CRYPT_MAC;
 					if (cur_key != t) {
 						cur_key = t;
 						rf_set_key(&keys[t][0]);
@@ -321,20 +323,26 @@ tx_p(u8 c)
 }
 
 void
-send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u8 cmd)
+send_rcv_packet()
 {
-	unsigned char xl = len+6+8;
-	unsigned int sum = cmd+len+8;
+	unsigned int sum = rx_len+8;
+	unsigned char xl = sum+6;
 	unsigned char c, l;
+	unsigned char  __xdata *d = (u8 * __xdata)rx_packet;
 
 	if (xl > tx_count)
 		return;
 	tx_p(PKT_MAGIC_0);
 	tx_p(PKT_MAGIC_1);
-	tx_p(cmd);
-	tx_p(len+8);
+	{
+		unsigned char cmd = rx_crypto?PKT_CMD_RCV_PACKET_CRYPT:PKT_CMD_RCV_PACKET;
+		tx_p(cmd);
+		sum += cmd;
+	}
+	tx_p(rx_len+8);
 	l = 8;
-	if (mac) {
+	if (!rx_broadcast) {
+		unsigned char __xdata *mac = rx_mac;
 		while (l--) {
 			c = *mac++;
 			sum += c;
@@ -345,11 +353,14 @@ send_rcv_packet(unsigned char  __xdata *mac, unsigned char __xdata *d, u8 len, u
 			tx_p(0xff);
 			sum += 0xff;
 		}
-	}
-	while (len--) {
-		c = *d++;
-		sum += c;
-		tx_p(c);
+	} 
+	{
+		unsigned char len = rx_len;
+		while (len--) {
+			c = *d++;
+			sum += c;
+			tx_p(c);
+		}
 	}
 	tx_p(sum);
 	tx_p(sum>>8);
@@ -459,7 +470,7 @@ static unsigned int my_app(unsigned char op)
 	case APP_GET_KEY:
 		return (unsigned int)&keys[cur_key][0];
 	case APP_RCV_PACKET:
-		send_rcv_packet((u8 * __xdata)rx_packet, rx_mac, rx_len, rx_crypto?PKT_CMD_RCV_PACKET_CRYPT:PKT_CMD_RCV_PACKET);
+		send_rcv_packet();
 		break;
 	}
 	return 0;

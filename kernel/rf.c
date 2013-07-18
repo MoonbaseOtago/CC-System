@@ -317,11 +317,13 @@ rcv_handler(task __xdata* ppp)
 		rx_crypto = 1;
 		rx_packet = (packet __xdata *)&rx_data[hdr+5];
 		rx_len = c;
-		if (incoming_suota_version(rx_packet))
-			return;
-		if  (rx_packet->type == P_TYPE_SUOTA_REQ || rx_packet->type == P_TYPE_SUOTA_RESP) {
-			incoming_suota_packet(rx_packet, rx_len);
-			return;
+		if (suota_enabled) {
+			if (incoming_suota_version(rx_packet))
+				return;
+			if  (rx_packet->type == P_TYPE_SUOTA_REQ || rx_packet->type == P_TYPE_SUOTA_RESP) {
+				incoming_suota_packet(rx_packet, rx_len);
+				return;
+			}
 		}
 	} else {
 		rx_crypto = 0;
@@ -447,33 +449,34 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r0, #_rf_send_PARM_2
 	movx	a, @r0
 	mov	r5, a		// len
-	inc	dptr
-	mov	r0, #_rf_id	//	memcpy(&pkt->id[0], &rf_id[0], 2);
-	mov	r2, #2
-0018$:		movx	a, @r0
-		inc	r0
-		movx	@dptr, a
-		inc dptr
-		djnz	r2, 0018$
-	mov	r0, #_current_code//    pkt->arch = current_code->arch;
-	movx	a, @r0		//	memcpy(&pkt->version[0], &current_code->version[0], 3);
-	add	a, #4
-	mov	_DPL1, a
-	inc 	r0
-	movx	a, @r0
-	addc	a, #0
-	mov	_DPH1, a
-	mov	_DPS, #1
-	mov	r2, #4
-0019$:		movx	a, @dptr
+	jnb	_suota_enabled, 0700$	//	if (suota_enabled) {
 		inc	dptr
-		mov	_DPS, #0
-		movx	@dptr, a
-		inc	dptr
-		mov     _DPS, #1
-		djnz	r2, 0019$
-	mov     _DPS, #0
-
+		mov	r0, #_rf_id	//		memcpy(&pkt->id[0], &rf_id[0], 2);
+		mov	r2, #2
+0018$:			movx	a, @r0
+			inc	r0
+			movx	@dptr, a
+			inc dptr
+			djnz	r2, 0018$
+		mov	r0, #_current_code//    	pkt->arch = current_code->arch;
+		movx	a, @r0		//		memcpy(&pkt->version[0], &current_code->version[0], 3);
+		add	a, #4
+		mov	_DPL1, a
+		inc 	r0
+		movx	a, @r0
+		addc	a, #0
+		mov	_DPH1, a
+		mov	_DPS, #1
+		mov	r2, #4
+0019$:			movx	a, @dptr
+			inc	dptr
+			mov	_DPS, #0
+			movx	@dptr, a
+			inc	dptr
+			mov     _DPS, #1
+			djnz	r2, 0019$
+		mov     _DPS, #0	//	}
+0700$:
 	mov	dptr, #_FSMSTAT1//	while (FSMSTAT1 & ((1<<1) | (1<<5)))	// SFD | TX_ACTIVE
 0017$:		movx	a, @dptr//		;
 		anl	a, #(1<<1)|(1<<5)
@@ -518,14 +521,14 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	movx	a, @r0			//	if (!crypto) {
 	jnz	0012$
 		mov	a, r5		//		RFD = len+HDR_SIZE+0;
-		add	a, #HDR_SIZE
+		add	a, #HDR_SIZE+2
 		add	a, r2
 		mov	_RFD, a
 		mov	a, #(1<<0)|(1<<6)//	} else {
 		sjmp	0013$
 
 0012$:	 	mov	a, r5		//		RFD = len+HDR_SIZE+5;
-		add	a, #HDR_SIZE+5
+		add	a, #HDR_SIZE+5+2
 		add	a, r2
 		mov	_RFD, a
 		mov     a, #(1<<0)|(1<<6)|(1<<3)//}
@@ -860,7 +863,8 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		mov	dph, r7
 0005$:					//	}
 	// fill buffer
-0004$:		movx	a, @dptr	// 	while (len--)
+0004$:	
+		movx	a, @dptr	// 	while (len--)
 		mov	_RFD, a		//		RFD = *p++;
 		inc	dptr
 	djnz	r5, 0004$

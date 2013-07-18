@@ -39,6 +39,7 @@ void incoming_suota_packet(packet __xdata* p, u8 len);
 u8 incoming_suota_version(packet __xdata *p);
 void suota_setup();
 extern code_hdr  __code * __xdata current_code;
+extern __bit suota_enabled;
 #endif
 
 #endif

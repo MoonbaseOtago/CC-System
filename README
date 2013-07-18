@@ -85,8 +85,6 @@ use software update over the air you'll have to play nice and use it since the S
         	u8      id[2];
         	u8      arch;
         	u8      version[3];
-        	u8      hops;
-        	u8      uniq[2];        // uniq filter
         	u8      data[1];
 	} packet;
 
@@ -96,15 +94,25 @@ use software update over the air you'll have to play nice and use it since the S
 	//  id[2]	node id - used to avoid broadcast storms in macless environments
 	//  arch 	software object we support
 	//  version[3]	version of software we support 
-	//  hops	used to stop packets from living forever in the net
-	//  uniq[2]	unique packet filter (for routing) - if you set hops to 0 these
-	//		bytes are available to you
 	//  data[N]	data payload - you only have ~100 bytes 802.11 packets are tiny
 
 rf_send() will fill in id, arch, version for you
 
+If SUOTA is enabled ('suota_enabled' is true) then the 'id', 'arch' and 'version fields will be filled in for you from your application header - otherwise all the bytes are yours to play with
+
 The App interface is used to receive packets and will also poll for a crypto key and mac address during
 system bring up. 
+
+If you're using the playa macless protocol the first 3 bytes of the data packet are used for TTL and
+to stop multiple retransmission of broadcast packets
+
+	typedef struct broadcast_filter {
+        	u8      hops;
+        	u8      uniq[2];        // uniq filter
+	} broadcast_filter;
+	//  hops	used to stop packets from living forever in the net
+	//  uniq[2]	unique packet filter (for routing) - if you set hops to 0 these
+	//		bytes are available to you
 
 
 Applications

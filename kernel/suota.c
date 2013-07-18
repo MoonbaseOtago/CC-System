@@ -34,6 +34,7 @@ __pdata u8  suota_state;
 __pdata unsigned int suota_offset;
 __pdata unsigned char suota_version[3];
 __pdata unsigned long suota_crc;
+__bit suota_enabled = 0;
 extern __pdata unsigned unsigned char tmp[32];
 
 static void suota_timeout(task __xdata * t);
