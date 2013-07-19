@@ -381,7 +381,7 @@ void rf_isr()  __interrupt(16) __naked
 		mov	_rx_len, r1	//		rx_len = l;
 0004$:		
 			mov	a, _RFD //		while (l--) 
-//			movx	@dptr, a//			*p++ = RFD;
+			movx	@dptr, a//			*p++ = RFD;
 			inc	dptr
 			djnz	r1, 0004$
 		mov	_rx_status, _RFD		//		rx_status[0] = RFD;
