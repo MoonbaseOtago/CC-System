@@ -335,23 +335,20 @@ send_rcv_packet()
 	tx_p(PKT_MAGIC_0);
 	tx_p(PKT_MAGIC_1);
 	{
-		unsigned char cmd = rx_crypto?PKT_CMD_RCV_PACKET_CRYPT:PKT_CMD_RCV_PACKET;
+		unsigned char cmd =
+			rx_broadcast? (rx_crypto?PKT_CMD_RCV_PACKET_CRYPT_BROADCAST:PKT_CMD_RCV_PACKET_BROADCAST):
+				      (rx_crypto?PKT_CMD_RCV_PACKET_CRYPT:PKT_CMD_RCV_PACKET);
 		tx_p(cmd);
 		sum += cmd;
 	}
 	tx_p(rx_len+8);
 	l = 8;
-	if (!rx_broadcast) {
+	{
 		unsigned char __xdata *mac = rx_mac;
 		while (l--) {
 			c = *mac++;
 			sum += c;
 			tx_p(c);
-		}
-	} else {
-		while (l--) {
-			tx_p(0xff);
-			sum += 0xff;
 		}
 	} 
 	{

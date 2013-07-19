@@ -26,21 +26,23 @@
 #define PKT_MAGIC_0 0x93
 #define PKT_MAGIC_1 0xa5
 
-#define PKT_CMD_OK			0x00
-#define PKT_CMD_RCV_OFF			0x01
-#define PKT_CMD_RCV_ON			0x02
-#define PKT_CMD_SET_CHANNEL		0x03
-#define PKT_CMD_SET_KEY			0x04
-#define PKT_CMD_RCV_PACKET		0x05
-#define PKT_CMD_SET_MAC			0x06
-#define PKT_CMD_SEND_PACKET		0x07
-#define PKT_CMD_SEND_PACKET_MAC		0x08
-#define PKT_CMD_PRINTF			0x09
-#define PKT_CMD_PING			0x0a
-#define PKT_CMD_SET_SUOTA_VERSION	0x0b
-#define PKT_CMD_SEND_PACKET_CRYPT	0x20	// 0x20->0x27 depending on key
-#define PKT_CMD_SEND_PACKET_CRYPT_MAC	0x40	// 0x20->0x27 depending on key
-#define PKT_CMD_RCV_PACKET_CRYPT	0x60	// only 1 key for now
+#define PKT_CMD_OK				0x00
+#define PKT_CMD_RCV_OFF				0x01
+#define PKT_CMD_RCV_ON				0x02
+#define PKT_CMD_SET_CHANNEL			0x03
+#define PKT_CMD_SET_KEY				0x04
+#define PKT_CMD_RCV_PACKET			0x05
+#define PKT_CMD_SET_MAC				0x06
+#define PKT_CMD_SEND_PACKET			0x07
+#define PKT_CMD_SEND_PACKET_MAC			0x08
+#define PKT_CMD_PRINTF				0x09
+#define PKT_CMD_PING				0x0a
+#define PKT_CMD_SET_SUOTA_VERSION		0x0b
+#define PKT_CMD_RCV_PACKET_BROADCAST		0x0c
+#define PKT_CMD_SEND_PACKET_CRYPT		0x20	// 0x20->0x27 depending on key
+#define PKT_CMD_SEND_PACKET_CRYPT_MAC		0x40	// 0x20->0x27 depending on key
+#define PKT_CMD_RCV_PACKET_CRYPT		0x60	// only 1 key for now
+#define PKT_CMD_RCV_PACKET_CRYPT_BROADCAST	0x80	// only 1 key for now
 
 #ifndef SDCC
 //
@@ -91,7 +93,7 @@ extern "C" {
 #include <stdio.h>
 #include <pthread.h>
 typedef void *rf_handle;
-typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *data, int len);
+typedef void (*rf_rcv)(rf_handle, int broadcast, int crypt, unsigned char *mac, unsigned char *data, int len);
 extern rf_handle rf_open(const char *serial_device, rf_rcv rcv_callback);
 extern void rf_close(rf_handle handle);
 #define RF_NO_KEY (-1)

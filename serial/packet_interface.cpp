@@ -34,7 +34,7 @@
 //	C bindings
 //
 typedef void *rf_handle;
-typedef void (*rf_rcv)(rf_handle, int crypt, unsigned char *mac, unsigned char *data, int len);
+typedef void (*rf_rcv)(rf_handle, int broadcast, int crypt, unsigned char *mac, unsigned char *data, int len);
 rf_handle
 rf_open(const char *serial_device, rf_rcv rcv_callback)
 {
@@ -386,10 +386,12 @@ rf_interface::rf_thread()
 					fprintf(stderr, "PRINT: %s", (char *)&data[0]);
 					break;
 				case PKT_CMD_RCV_PACKET:
+				case PKT_CMD_RCV_PACKET_BROADCAST:
 					if (callback) 
-						(*callback)(this, 0, &data[0], &data[8], len-8);
+						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_BROADCAST?1:0, 0, &data[0], &data[8], len-8);
 					goto log;
 				case PKT_CMD_RCV_PACKET_CRYPT:
+				case PKT_CMD_RCV_PACKET_CRYPT_BROADCAST:
 					if (suota_list && ((packet *)&data[8])->type == P_TYPE_SUOTA_REQ) {
 						packet *p = (packet *)&data[8];
 						suota_req *srp = (suota_req*)&p->data[0];
@@ -429,10 +431,10 @@ rf_interface::rf_thread()
 						
 					}
 					if (callback) 
-						(*callback)(this, 1, &data[0], &data[8], len-8);
+						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST?1:0, 1, &data[0], &data[8], len-8);
 log:					if (auto_dump) {
 						if (auto_dump) {
-							fprintf(auto_dump, "rf %02x%02x%02x%02x:%02x%02x%02x%02x:: ", data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
+							fprintf(auto_dump, "rf %c %02x%02x%02x%02x:%02x%02x%02x%02x:: ", cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_BROADCAST?'B':' ', data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
 							for (int j = 0; j < len; j++) {
 								fprintf(auto_dump, "%02x ", data[j]);
 								if ((j&3) == 3)

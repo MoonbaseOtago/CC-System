@@ -44,7 +44,7 @@ static u8 __pdata seq;
 void rf_receive_on(void);
 extern void putstr (const char __code*);
 extern void puthex (unsigned char );
-static u8 __xdata mac[8];
+__xdata __at (0x616A)  u8 IEEE_MAC[8];
 
 static __code unsigned char default_mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
 
@@ -62,25 +62,26 @@ rf_set_mac(u8 __xdata *m)
 {
 	u8 i;
 	for (i = 0; i < 6; i++)
-		mac[i] = m[i];
-	mac[6] = rf_id[0] = m[6];
-	mac[7] = rf_id[1] = m[7];
+		IEEE_MAC[i] = m[i];
+	IEEE_MAC[6] = rf_id[0] = m[6];
+	IEEE_MAC[7] = rf_id[1] = m[7];
 }
 
 void
 rf_init(void)
 {
-    u8 key[16];
-    u8 *p;
     u8 i;
-    u8 __xdata *m;
 
-
-    m = (u8 __xdata*)app(APP_GET_MAC);
-    if (!m) {
-	memcpy(mac, &default_mac[0], 8);
-    } else {
-	memcpy(mac, m, 8);
+    {
+    	u8 __xdata *m = (u8 __xdata*)app(APP_GET_MAC);
+    
+	if (!m) {
+		for (i = 0; i < 8; i++)
+			IEEE_MAC[i] = default_mac[i];
+	} else {
+		for (i = 0; i < 8; i++)
+			IEEE_MAC[i] = *m++;
+    	}
     }
     // Enable auto crc
     FRMCTRL0 |= (1<<6);	
@@ -105,17 +106,18 @@ rf_init(void)
     nonce_rx[13] = 6;
     nonce_tx[0] = 9;
     nonce_rx[13] = 6;
-    nonce_tx[8] = mac[7];
-    nonce_tx[7] = mac[6];
+    nonce_tx[8] = rf_id[1] = IEEE_MAC[7];
+    nonce_tx[7] = rf_id[0] = IEEE_MAC[6];
 
     // generate rf_id  XXX
     
     ENCCS = (ENCCS & ~0x07) | 0x04;	// AES_LOAD_KEY
     ENCCS |= 0x01;			// start
-    p = (u8 __code*)app(APP_GET_KEY);
-    for (p = key, i=0; i<16; i++) 
-        ENCDI = *p++;
-
+    { 
+    	u8 __code*m = (u8 __code*)app(APP_GET_KEY);
+    	for (i=0; i<16; i++) 
+        	ENCDI = *m++;
+    }
     rf_set_channel(11);	// for a start
     rf_receive_on();
 }
@@ -590,10 +592,10 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r2, #8		//	RFD = *p++ = *mac++;	// src addres
 			 	//	RFD = *p++ = *mac++;
 				//	RFD = *p++ = *mac++;
-	mov	_DPL1, #_mac	//	RFD = *p++ = *mac++;
+	mov	_DPL1, #_IEEE_MAC//	RFD = *p++ = *mac++;
 				//	RFD = *p++ = *mac++;
 				//	RFD = *p++ = *mac++;
-	mov	_DPH1, #_mac>>8
+	mov	_DPH1, #_IEEE_MAC>>8
 0010$:		mov	_DPS, #1//	RFD = *p++ = *mac++;
 		clr	a
 		movx	a, @dptr// 	RFD = *p++ = *mac++;	
