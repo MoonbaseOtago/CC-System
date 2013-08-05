@@ -389,11 +389,9 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 	//putchar('m');
                 	aes_op(&tmp[0], AES_ENCRYPT, i, &cipher[0], &iv[0]);
 	//putchar('n');
-	#ifdef NOTDEF
 			if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0) {	// discard bogus packet
 				return;
 			}
-	#endif
 			rx_crypto = 1;
 			rx_packet = (packet __xdata *)&rx_data[hdr+5];
 			rx_len = c;
