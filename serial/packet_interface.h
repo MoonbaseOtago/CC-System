@@ -39,6 +39,8 @@
 #define PKT_CMD_PING				0x0a
 #define PKT_CMD_SET_SUOTA_VERSION		0x0b
 #define PKT_CMD_RCV_PACKET_BROADCAST		0x0c
+#define	PKT_CMD_SET_PROMISCUOUS			0x0d
+#define	PKT_CMD_SET_RAW				0x0e
 #define PKT_CMD_SEND_PACKET_CRYPT		0x20	// 0x20->0x27 depending on key
 #define PKT_CMD_SEND_PACKET_CRYPT_MAC		0x40	// 0x20->0x27 depending on key
 #define PKT_CMD_RCV_PACKET_CRYPT		0x60	// only 1 key for now
@@ -106,6 +108,8 @@ extern void rf_set_auto_dump(rf_handle handle, FILE *output);
 extern void rf_set_channel(rf_handle handle, int channel);
 extern void rf_set_key(rf_handle handle, int k, const unsigned char *key);
 extern void rf_set_mac(rf_handle handle, const unsigned char *mac);
+extern void rf_set_promiscuous(rf_handle handle, int on);
+extern void rf_set_raw(rf_handle handle, int on);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_set_suota_version(rf_handle handle, unsigned char arch, unsigned long version);
@@ -124,6 +128,8 @@ public:
 	void set_channel(int channel);
 	void set_key(int k, const unsigned char *key);
 	void set_mac(const unsigned char *mac);
+	void set_promiscuous(int on);
+	void set_raw(int on);
 	void send(const unsigned char *mac, const unsigned char *data, int len);
 	void send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len);
 	int opened_ok() { return fd >= 0; }

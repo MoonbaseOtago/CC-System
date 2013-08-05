@@ -43,6 +43,8 @@ iretx() __naked
 	reti
 	__endasm;
 }
+static u8 __data isr_save0;
+static u8 __data isr_save1;
 extern void sleep();
 //extern void rf_err_isr()  __interrupt(0);
 extern void rf_isr()  __interrupt(16);
@@ -50,132 +52,141 @@ extern void rf_isr()  __interrupt(16);
 extern void t1_isr()  __interrupt(9);
 extern void keys_on();
 #else
-void (* __data t1_vect) () = iretx;
+void (* __pdata t1_vect) () = iretx;
 void t1_isr()  __interrupt(9) __naked
 {	
 	__asm;
-	push	_t1_vect
-	push	_t1_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_t1_vect
+	sjmp 	do_isr
 	__endasm;
 }
 #endif
 
-void (* __data uart_rx_0_vect) () = iretx;
-void (* __data uart_rx_1_vect) () = iretx;
-void (* __data uart_tx_0_vect) () = iretx;
-void (* __data uart_tx_1_vect) () = iretx;
-void (* __data p0_vect) () = iretx;
-void (* __data p1_vect) () = iretx;
-void (* __data p2_vect) () = iretx;
-void (* __data t2_vect) () = iretx;
-void (* __data t3_vect) () = iretx;
-void (* __data t4_vect) () = iretx;
-void (* __data adc_vect) () = iretx;
-void (* __data aec_vect) () = iretx;
-void (* __data dma_vect) () = iretx;
+void (* __pdata uart_rx_0_vect) () = iretx;
+void (* __pdata uart_rx_1_vect) () = iretx;
+void (* __pdata uart_tx_0_vect) () = iretx;
+void (* __pdata uart_tx_1_vect) () = iretx;
+void (* __pdata p0_vect) () = iretx;
+void (* __pdata p1_vect) () = iretx;
+void (* __pdata p2_vect) () = iretx;
+void (* __pdata t2_vect) () = iretx;
+void (* __pdata t3_vect) () = iretx;
+void (* __pdata t4_vect) () = iretx;
+void (* __pdata adc_vect) () = iretx;
+void (* __pdata aec_vect) () = iretx;
+void (* __pdata dma_vect) () = iretx;
 void uart_rx_0_isr()  __interrupt(2) __naked
 {	
 	__asm;
-	push	_uart_rx_0_vect
-	push	_uart_rx_0_vect+1
+	mov	_isr_save0, r0
+	mov	r0, #_uart_rx_0_vect
+do_isr:	mov	_isr_save1, a
+	movx	a, @r0
+	push	acc
+	inc	r0
+	movx	a, @r0
+	push	acc
+	mov	r0, _isr_save0
+	mov	a, _isr_save1
+	
 	ret
 	__endasm;
 }
 void uart_rx_1_isr()  __interrupt(3) __naked
 {	
 	__asm;
-	push	_uart_rx_1_vect
-	push	_uart_rx_1_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_uart_rx_1_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void uart_tx_0_isr()  __interrupt(7) __naked
 {	
 	__asm;
-	push	_uart_tx_0_vect
-	push	_uart_tx_0_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_uart_tx_0_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void uart_tx_1_isr()  __interrupt(14) __naked
 {	
 	__asm;
-	push	_uart_tx_1_vect
-	push	_uart_tx_1_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_uart_tx_1_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void p0_isr()  __interrupt(13) __naked
 {	
 	__asm;
-	push	_p0_vect
-	push	_p0_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_p0_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void p1_isr()  __interrupt(15) __naked
 {	
 	__asm;
-	push	_p1_vect
-	push	_p1_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_p1_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void p2_isr()  __interrupt(6) __naked
 {	
 	__asm;
-	push	_p2_vect
-	push	_p2_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_p2_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void t2_isr()  __interrupt(10) __naked
 {	
 	__asm;
-	push	_t2_vect
-	push	_t2_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_t2_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void t3_isr()  __interrupt(11) __naked
 {	
 	__asm;
-	push	_t3_vect
-	push	_t3_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_t3_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void t4_isr()  __interrupt(12) __naked
 {	
 	__asm;
-	push	_t4_vect
-	push	_t4_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_t4_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void adc_isr()  __interrupt(1) __naked
 {	
 	__asm;
-	push	_adc_vect
-	push	_adc_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_adc_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void aec_isr()  __interrupt(4) __naked
 {	
 	__asm;
-	push	_aec_vect
-	push	_aec_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_aec_vect
+	sjmp 	do_isr
 	__endasm;
 }
 void dma_isr()  __interrupt(8) __naked
 {	
 	__asm;
-	push	_dma_vect
-	push	_dma_vect+1
-	ret
+	mov	_isr_save0, r0
+	mov	r0, #_dma_vect
+	sjmp 	do_isr
 	__endasm;
 }
 

@@ -41,7 +41,7 @@ void putchar(char c)
     UTX0IF = 0;
 }
 
-void putstr(char *cp)
+void putstr(char __code *cp)
 {
 	for (;;) {
 		char c = *cp++;

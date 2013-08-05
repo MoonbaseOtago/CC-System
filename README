@@ -163,13 +163,13 @@ get out, as fast as you can - these calls are made from task callout routines:
 			//
 			return (void *)&mac;
 		case APP_GET_KEY:
+			extern u8 __xdata rtx_key;
 			//
-			//	return the address of the 16 byte aes key to use for
-			//	this board - if you return NULL it will use the default 
-			//	key programmed into the board at manufacture
-			//	(can be overridden with rf_set_key()
+			//	this is a request for you to set the 16 byte aes key number 
+			//	selected by rtx_key by calling rf_set_key();
 			//
-			return (void *)&key;
+			rf_set_key(&aes_keys[rtx_key][0]);
+			return 0;
 		case APP_RCV_PACKET:
 			{
 				// these are defined in interface.h, locations may change

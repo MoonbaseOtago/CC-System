@@ -271,7 +271,7 @@ static void uart_rcv_thread(task __xdata*t)
 				break;
 			case PKT_CMD_RCV_ON:
 				rf_receive_on();
-				cur_key = r[0];
+				cur_key = r[0]&7;
 				rf_set_key(&keys[cur_key][0]);
 				break;
 			case PKT_CMD_SET_CHANNEL:
@@ -288,6 +288,12 @@ static void uart_rcv_thread(task __xdata*t)
 				break;
 			case PKT_CMD_SEND_PACKET_MAC:
 				rf_send((packet __xdata*)&r[8], rlen-8, 0, &r[0]);
+				break;
+			case PKT_CMD_SET_PROMISCUOUS:
+				rf_set_promiscuous(r[0]);
+				break;
+			case PKT_CMD_SET_RAW:
+				rf_set_raw(r[0]);
 				break;
 			default:
 				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT && rcmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {
@@ -429,6 +435,42 @@ send_printf(char  __code *cp)
 	EA = 1;
 }
 
+void
+send_printf_xdata(char  __xdata *cp)
+{
+	unsigned char len = strlen(cp)+1;
+	unsigned char xl = len+6;
+	unsigned int sum = PKT_CMD_PRINTF+len;
+	unsigned char c;
+
+	if (xl > tx_count)
+		return;
+	tx_p(PKT_MAGIC_0);
+	tx_p(PKT_MAGIC_1);
+	tx_p(PKT_CMD_PRINTF);
+	tx_p(len);
+	while (len--) {
+		c = *cp++;
+		sum += c;
+		tx_p(c);
+		if (!c)
+			break;
+	}
+	tx_p(sum);
+	tx_p(sum>>8);
+	EA = 0;
+	tx_count -= xl;
+	if (!tx_busy) {
+		tx_busy = 1;
+		tx_count++;
+		U0DBUF = *tx_out++;
+		if (tx_out == &tx_buff[TX_SIZE])
+			tx_out = &tx_buff[0];
+		IEN2 |= 1<<2;
+	}
+	EA = 1;
+}
+
 static void
 uart_setup()
 {
@@ -465,7 +507,9 @@ static unsigned int my_app(unsigned char op)
 	case APP_GET_MAC:
 		return 0;
 	case APP_GET_KEY:
-		return (unsigned int)&keys[cur_key][0];
+		if (cur_key != 0xff)
+			rf_set_key(&keys[cur_key][0]);
+		break;
 	case APP_RCV_PACKET:
 		send_rcv_packet();
 		break;
@@ -473,3 +517,68 @@ static unsigned int my_app(unsigned char op)
 	return 0;
 }
 
+static char __xdata t[256];
+__xdata static unsigned char *tc=&t[0];
+void pc(char c)
+{
+	*tc++ = c;
+}
+void ps(const char __code *cp)
+{
+	char c;
+	for (;;) {
+		c = *cp++;
+		if (!c)
+			return;
+		*tc++ = c;
+	}
+}
+void pf(const char __code *cp)
+{
+	ps(cp);
+	*tc = 0;
+	send_printf_xdata(&t[0]);
+	while (tx_busy);
+	tc = &t[0];
+}
+void ph(u8 v)
+{
+	u8 x;
+	char c;
+	x =(v>>4)&0xf;
+	if (x < 10) {
+		c = '0'+x;
+	} else {
+		c = 'A'+x-10;
+	}
+	*tc++ = c;
+	x =(v)&0xf;
+	if (x < 10) {
+		c = '0'+x;
+	} else {
+		c = 'A'+x-10;
+	}
+	*tc++ = c;
+}
+void pdd(unsigned char __pdata *s, u8 len)
+{
+	ph(len);
+	pc(' ');
+	ph(((unsigned int)s)>>8);
+	ph((u8)s);
+	pc(' ');
+	while (len--)
+		ph(*s++);
+
+}
+void pd(unsigned char __xdata *s, u8 len)
+{
+	ph(len);
+	pc(' ');
+	ph(((unsigned int)s)>>8);
+	ph((u8)s);
+	pc(' ');
+	while (len--)
+		ph(*s++);
+
+}

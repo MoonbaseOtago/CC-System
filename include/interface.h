@@ -31,7 +31,6 @@ extern unsigned int (* __data x_app) (u8 v);
 #define APP_GET_KEY 		2
 #define APP_RCV_PACKET		3
 extern u8 __data rx_len;
-extern u8 __data rx_status[2];
 extern packet __xdata  * __data rx_packet;
 extern __bit rx_crypto;
 extern __bit rx_broadcast;
@@ -52,6 +51,7 @@ void rf_receive_on(void);
 void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
+extern u8 __xdata rtx_key;
 extern void rf_set_mac(u8 __xdata *m);
 extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto, __xdata unsigned char *mac);
 #define	XMT_POWER_NEG_3DB	-3
@@ -59,7 +59,8 @@ extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto, __xdata unsigned cha
 #define	XMT_POWER_4DB		4
 #define	XMT_POWER_MAXDB		100
 extern void rf_set_transmit_power(char power);
-
+extern void rf_set_promiscuous(u8 on);
+extern void rf_set_raw(u8 on);
 
 extern unsigned char daylight(void);
 extern void keys_on();
@@ -70,17 +71,17 @@ extern void putstr(char __code *cp);
 extern void puthex(unsigned char v);
 
 
-extern void (* __data uart_rx_0_vect) ();
-extern void (* __data uart_rx_1_vect) ();
-extern void (* __data uart_tx_0_vect) ();
-extern void (* __data uart_tx_1_vect) ();
-extern void (* __data p0_vect) ();
-extern void (* __data p1_vect) ();
-extern void (* __data p2_vect) ();
-extern void (* __data t2_vect) ();
-extern void (* __data t3_vect) ();
-extern void (* __data t4_vect) ();
-extern void (* __data adc_vect) ();
-extern void (* __data aec_vect) ();
-extern void (* __data dma_vect) ();
+extern void (* __pdata uart_rx_0_vect) ();
+extern void (* __pdata uart_rx_1_vect) ();
+extern void (* __pdata uart_tx_0_vect) ();
+extern void (* __pdata uart_tx_1_vect) ();
+extern void (* __pdata p0_vect) ();
+extern void (* __pdata p1_vect) ();
+extern void (* __pdata p2_vect) ();
+extern void (* __pdata t2_vect) ();
+extern void (* __pdata t3_vect) ();
+extern void (* __pdata t4_vect) ();
+extern void (* __pdata adc_vect) ();
+extern void (* __pdata aec_vect) ();
+extern void (* __pdata dma_vect) ();
 #endif

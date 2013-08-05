@@ -109,6 +109,20 @@ rf_set_mac(rf_handle handle, const unsigned char *mac)
 }
 
 void
+rf_set_promiscuous(rf_handle handle, int on)
+{
+	rf_interface *i = (rf_interface*)handle;
+	i->set_promiscuous(on);
+}
+
+void
+rf_set_raw(rf_handle handle, int on)
+{
+	rf_interface *i = (rf_interface*)handle;
+	i->set_raw(on);
+}
+
+void
 rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len)
 {
 	rf_interface *i = (rf_interface*)handle;
@@ -231,6 +245,20 @@ void
 rf_interface::ping()
 {
 	send_packet(PKT_CMD_PING, 5, (unsigned char *)"test");
+}
+
+void
+rf_interface::set_raw(int on)
+{
+	unsigned char c = (on?1:0);
+	send_packet(PKT_CMD_SET_RAW, 1, &c);
+}
+
+void
+rf_interface::set_promiscuous(int on)
+{
+	unsigned char c = (on?1:0);
+	send_packet(PKT_CMD_SET_PROMISCUOUS, 1, &c);
 }
 
 void
@@ -383,7 +411,8 @@ rf_interface::rf_thread()
 					data[len-1] = 0;
 					if (auto_dump) 
 						fprintf(auto_dump, "PRINT: %s", (char *)&data[0]);
-					fprintf(stderr, "PRINT: %s", (char *)&data[0]);
+					if (auto_dump != stderr)
+						fprintf(stderr, "PRINT: %s", (char *)&data[0]);
 					break;
 				case PKT_CMD_RCV_PACKET:
 				case PKT_CMD_RCV_PACKET_BROADCAST:
@@ -434,8 +463,8 @@ rf_interface::rf_thread()
 						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST?1:0, 1, &data[0], &data[8], len-8);
 log:					if (auto_dump) {
 						if (auto_dump) {
-							fprintf(auto_dump, "rf %c %02x%02x%02x%02x:%02x%02x%02x%02x:: ", cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_BROADCAST?'B':' ', data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
-							for (int j = 0; j < len; j++) {
+							fprintf(auto_dump, "rf %c %3d %02x%02x%02x%02x:%02x%02x%02x%02x:: ", cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_BROADCAST?'B':' ', len-8, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
+							for (int j = 8; j < len; j++) {
 								fprintf(auto_dump, "%02x ", data[j]);
 								if ((j&3) == 3)
 									fprintf(auto_dump, " ");
@@ -485,8 +514,11 @@ rf_interface::initialise(const char *file)
 	if (!opened_ok())
 		return 0;
 	FILE *f = fopen(file, "r");
-	if (!f)
+	if (!f) {
+		fprintf(stderr, "rf_interface::initialise(): can't open file '%s'\n", file);
 		return 0;
+	}
+	line = 0;
 	for (;;) {
 		char b[1024];
 
@@ -548,8 +580,19 @@ rf_interface::command(const char *cc, const char *file, int line)
 	case 'p':
 		ping();
 		break;
+	case 'P':
+		set_promiscuous(*cp == '-'?0:1);
+		break;
+	case 'r':
+		set_raw(*cp == '-'?0:1);
+		break;
 	case 'a':
 		set_auto_dump(*cp == '-'?0:stderr);
+		break;
+	case 'A':
+		set_auto_dump(*cp == '-'?0:stderr);
+		set_promiscuous(*cp == '-'?0:1);
+		set_raw(*cp == '-'?0:1);
 		break;
 	case 'c':
 		i = strtol(cp, 0, 0);

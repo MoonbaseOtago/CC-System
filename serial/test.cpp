@@ -16,6 +16,7 @@ void
 help()
 {
 	printf("a: autodump\n");
+	printf("A: autodump, raw and promiscuous\n");
 	printf("c: set rf channel 11-26             - c channel\n");
 	printf("h: help\n");
 	printf("i: initialise file\n");
@@ -25,6 +26,8 @@ help()
 	printf("O: on, key 0\n");
 	printf("o: off\n");
 	printf("p: ping\n");
+	printf("P: set promiscuous (snoops any packet)\n");
+	printf("r: set raw - dumps all received pckets\n");
 	printf("s: send a broadcast packet          - s * cmd count\n");
 	printf("s: send a directed packet           - s a:b:c:d:e:f:g cmd count\n");
 	printf("!: send a broadcast crypto packet   - ! key-num * cmd count\n");
@@ -40,7 +43,27 @@ main(int argc, char **argv)
 	rf_interface *rfp;
 	const char *tp;
 	char b[256];
+	char *init=0;
 
+	while (argc >= 2 && argv[1] && argv[1][0] =='-') {
+		switch (argv[1][1]) {
+		case 'i':
+			if (argv[1][2]) {
+				init = &argv[1][2];
+			} else
+			if (argc > 3) {
+				argc--;
+				argv++;
+				init = argv[1];
+			}
+			break;
+		default:
+			fprintf(stderr, "Unknown flag '%s'\n", argv[1]);
+			exit(99);
+		}
+		argc--;
+		argv++;
+	}
 	if (argc < 2) {
 		tp = "/dev/ttyUSB0";
 	} else {

@@ -33,9 +33,11 @@ _CODE_HEADER:
 	__endasm;
 }
 
-__code unsigned char mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
-__code unsigned char ckey[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa,	// 16 byte crypto key - will change
-			       0x56, 0x87, 0x0f, 0x54, 0xd9, 0x2b, 0x76, 0x2e};
+__xdata unsigned char mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
+__xdata unsigned char ckey[] = {0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,	// 16 byte crypto key - will change
+			       0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf};
+__xdata unsigned char test[] = {1,2,3,4,5,6};
+
 
 __data u8 led_ind=0;
 __xdata u8 leds[6];
@@ -53,11 +55,13 @@ static unsigned int my_app(unsigned char op)
 		leds_off();
 		// keys_on();	// call to enable key scanning (messes with uart)
 		rf_set_channel(11);
+		rf_send((packet __xdata*)&test[0], 6, 1, 0);
 		break;
 	case APP_GET_MAC:
 		return (unsigned int)&mac[0];
 	case APP_GET_KEY:
-		return (unsigned int)&ckey[0];
+		rf_set_key(&ckey[0]);
+		return 0;
 	case APP_RCV_PACKET:
 		//
 		// for playa broadcast protocol first 3 bytes are of type broadcast_filter
