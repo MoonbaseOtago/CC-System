@@ -55,7 +55,7 @@ static unsigned int my_app(unsigned char op)
 		leds_off();
 		// keys_on();	// call to enable key scanning (messes with uart)
 		rf_set_channel(11);
-		rf_send((packet __xdata*)&test[0], 6, 1, 0);
+		rf_send((packet __xdata*)&test[0], 6, 0, 0);
 		break;
 	case APP_GET_MAC:
 		return (unsigned int)&mac[0];
@@ -87,7 +87,7 @@ static unsigned int my_app(unsigned char op)
 				c--;
 			}
 			rx_packet->data[0]--;
-			rf_send(rx_packet, rx_len, 1, 0);
+			rf_send(rx_packet, rx_len, rtx_key, 0);
 			ph = &uniq_filter[uniq_index];
 			*ph++ = p0;
 			*ph = p1;

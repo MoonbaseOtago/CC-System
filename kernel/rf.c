@@ -45,6 +45,7 @@ __pdata static u8 nonce_rx[16];
 __pdata static u8 iv[16];
 __pdata u8 rf_id[2];
 __xdata unsigned char tmp_packet[32];
+u8 __data rtx_key;
 static u8 __pdata seq;
 void rf_receive_on(void);
 extern void putstr (const char __code*);
@@ -149,8 +150,7 @@ rf_init(void)
 
     // generate rf_id  XXX
     
-    
-    app(APP_GET_KEY);
+    rtx_key = 0xff;
 
     rf_set_channel(11);	// for a start
     rf_receive_on();
@@ -316,10 +316,17 @@ rcv_handler(task __xdata* ppp)
 			//
 			// len = rx_len - header len -2 length of data + crypto
 			// c = rx_len-5-8	// length of data
-			// f = 15+5	// length up to start of data
+			// f = 15+6	// length up to start of data
 			// m = 2
 	//putchar('a');
 ps("RECV=");pd(rx_data, rx_len);pf("\n");
+ps("HD=");ph(rx_data[hdr]);pf("\n");
+			if (rx_data[hdr] != (6|(1<<3)))
+				goto done;
+			if (rtx_key != rx_data[hdr+5]) {
+				rtx_key = rx_data[hdr+5];
+				app(APP_GET_KEY);
+			}
 			nonce_rx[9] = rx_data[hdr+1];
 			nonce_rx[10] = rx_data[hdr+2];
 			nonce_rx[11] = rx_data[hdr+3];
@@ -338,9 +345,9 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 			memcpy(&rx_data[rx_len-8], tmp, LM);
 	//putchar('d');
 	
-			c = rx_len-8-5-hdr;
+			c = rx_len-8-6-hdr;
 	//putchar('e');
-			memcpy(&cipher[0], &rx_data[hdr+5], c);
+			memcpy(&cipher[0], &rx_data[hdr+6], c);
 			p = &cipher[c];
 			l = (c+15)&0xf0;
 			for (i=c; i<l; i++)
@@ -351,7 +358,7 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 	//putchar('f');
 			aes_op(&cipher[0], AES_DECRYPT, c, tmp, iv);
 	//putchar('g');
-			memcpy(&rx_data[hdr+5], &tmp[0], c);
+			memcpy(&rx_data[hdr+6], &tmp[0], c);
 	//putchar('h');
 	
 			tmp[0] = 0x41 | ((LM-2)/2)<<3;
@@ -359,18 +366,18 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 			tmp[14] = 0;
 			tmp[15] = c;
 			tmp[16] = 0;
-			tmp[17] = hdr+5;
-			memcpy(&tmp[18], &rx_data[0], hdr+5);
+			tmp[17] = hdr+6;
+			memcpy(&tmp[18], &rx_data[0], hdr+6);
 	//putchar('i');
-			i = 18+hdr+5;
-			l = (18+hdr+5+15)&0xf0;
+			i = 18+hdr+6;
+			l = (18+hdr+6+15)&0xf0;
 			p = &tmp[i];
 			while (i < l) {
 				i++;
 				*p++ = 0;
 			}
 	//putchar('j');
-			p2 = &rx_data[hdr+5];
+			p2 = &rx_data[hdr+6];
 			l += c;
 			while (i < l) {
 				*p++ = *p2++;
@@ -389,11 +396,10 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 	//putchar('m');
                 	aes_op(&tmp[0], AES_ENCRYPT, i, &cipher[0], &iv[0]);
 	//putchar('n');
-			if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0) {	// discard bogus packet
-				return;
-			}
+			if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0)	// discard bogus packet
+				goto done;
 			rx_crypto = 1;
-			rx_packet = (packet __xdata *)&rx_data[hdr+5];
+			rx_packet = (packet __xdata *)&rx_data[hdr+6];
 			rx_len = c;
 			if (suota_enabled) {
 				if (incoming_suota_version(rx_packet))
@@ -409,6 +415,7 @@ ps("RECV=");pd(rx_data, rx_len);pf("\n");
 			rx_packet = (packet __xdata *)&rx_data[hdr];
 		}
 		app(APP_RCV_PACKET);
+done:
 		if (rx_rset) {
 			rx_busy1 = 0;
 			rx_rset = 0;
@@ -535,11 +542,38 @@ void rf_isr()  __interrupt(16) __naked
 }
 
 
-static __bit xmt_broadcast;
+static __bit xmt_broadcast, xmt_crypto;
 void
 rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __naked
 {
 	__asm;
+	mov	r0, #_rf_send_PARM_3
+	movx	a, @r0			//	if (crypto != NO_CRYPTO && rtx_key != crypto) {
+	jb	_ACC_7, 0219$
+	setb	_xmt_crypto
+	cjne	a, _rtx_key, 0215$
+		sjmp	0216$
+0215$:		push	dpl
+		push	dph
+		mov	dpl, #APP_GET_KEY		//	rtx_key = crypto;
+		mov	_rtx_key, a			//	add(get_key);
+		mov	a,#00212$
+		push	acc
+		mov	a,#(00212$ >> 8)
+		push	acc
+		push	_x_app
+		push	(_x_app + 1)
+		ret
+0212$:
+		pop	dph
+		pop	dpl
+		sjmp	0216$
+
+0219$:		clr	_xmt_crypto
+		jb	_ACC_0, 0216$
+		setb	_xmt_crypto
+		cjne    a, _rtx_key, 0215$	// }
+0216$:
 	mov	r6, dpl
 	mov	r7, dph		// pkt
 	mov	r0, #_rf_send_PARM_2
@@ -585,6 +619,9 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	_RFST, #0xee	//	RFST = 0xEE;	// txflush
 
 	mov	_RFIRQF1, #~(1<<1)//	RFIRQF1 = ~(1<<1);		// IRQ_TXDONE
+
+	//	set key
+	//
 		
 	//
 	//	packetLength;
@@ -611,19 +648,15 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		mov	a, #8
 2012$:
 	mov	r2, a
-	mov	r0, #_rf_send_PARM_3
-	movx	a, @r0			//	if (!crypto) {
-	jnz	0012$
-		mov	a, r5		//		RFD = len+HDR_SIZE+0;
+	jb	_xmt_crypto, 0012$
+		add	a, r5		//		RFD = len+HDR_SIZE+0;
 		add	a, #HDR_SIZE+2
-		add	a, r2
 		mov	_RFD, a
 		mov	a, #(1<<0)|(1<<6)//	} else {
 		sjmp	0013$
 
-0012$:	 	mov	a, r5		//		RFD = len+HDR_SIZE+5;
-		add	a, #HDR_SIZE+5+8+2
-		add	a, r2
+0012$:	 	add	a, r5		//		RFD = len+HDR_SIZE+6;
+		add	a, #HDR_SIZE+6+8+2
 		mov	_RFD, a
 		mov     a, #(1<<0)|(1<<6)|(1<<3)//}
 
@@ -698,13 +731,11 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		inc 	dptr
 		djnz	r2, 0010$
 	
-	mov	r0, #_rf_send_PARM_3
-	movx	a, @r0		//	if (crypto) {
-	jnz	9006$
+	jb	_xmt_crypto, 9006$
 		ljmp	0006$
 9006$:
-		mov	a, #6
-		mov	_RFD,a	//		RFD = 0x06;
+		mov	a, #6|(1<<3)
+		mov	_RFD,a	//		RFD = 0x06|(1<<3);
 		movx	@dptr, a
 		inc	dptr
 		
@@ -719,6 +750,10 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 // set up nonce in crypto buffer
 
 0023$:
+		mov	a, _rtx_key
+		mov     _RFD, a //      RFD = rtx_key
+		movx    @dptr, a
+		inc	dptr
 		inc	_DPS// #1		// DP1 -> tmp
 		mov	dptr, #_tmp		//	tmp[0] = 0x41 |
 		mov	a, #0x41|(((LM-2)/2)<<3)//		 ((LM-2)/2)<<3;
@@ -733,7 +768,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 			djnz    r2, 0024$
 //
 //	c = length 
-//	f = HDR_SIZE+5
+//	f = HDR_SIZE+6
 //	m = 2
 //      lm=8
 		clr	a		//	tmp[14] = 0;
@@ -746,18 +781,18 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		movx	@dptr, a
 		inc	dptr
 		jb	_xmt_broadcast, 5501$
-			mov	a, #HDR_SIZE+5+8-2
+			mov	a, #HDR_SIZE+6+8-2
 			movx	@dptr, a	
-			mov	dptr, #_tmp+(18+HDR_SIZE+5+8-2);
-			mov 	r1, #((18+HDR_SIZE+5+8-2+15)&0xf0) //	i = 18+HDR_SIZE+5;
-			mov	r2, #((18+HDR_SIZE+5+8-2+15)&0xf0)-(18+HDR_SIZE+5+8-2)  
+			mov	dptr, #_tmp+(18+HDR_SIZE+6+8-2);
+			mov 	r1, #((18+HDR_SIZE+6+8-2+15)&0xf0) //	i = 18+HDR_SIZE+6;
+			mov	r2, #((18+HDR_SIZE+6+8-2+15)&0xf0)-(18+HDR_SIZE+6+8-2)  
 			sjmp	5502$
 5501$:
-			mov	a, #HDR_SIZE+5	//	tmp[17] = HDR_SIZE+5;
+			mov	a, #HDR_SIZE+6	//	tmp[17] = HDR_SIZE+6;
 			movx	@dptr, a	
-			mov	dptr, #_tmp+(18+HDR_SIZE+5);
-			mov 	r1, #((18+HDR_SIZE+5+15)&0xf0) //	i = 18+HDR_SIZE+5;
-			mov	r2, #((18+HDR_SIZE+5+15)&0xf0)-(18+HDR_SIZE+5)
+			mov	dptr, #_tmp+(18+HDR_SIZE+6);
+			mov 	r1, #((18+HDR_SIZE+6+15)&0xf0) //	i = 18+HDR_SIZE+6;
+			mov	r2, #((18+HDR_SIZE+6+15)&0xf0)-(18+HDR_SIZE+6)
 5502$:
 //1003$:	jb	_tx_busy, 1003$
 // mov	_U0DBUF, #'A'	//		U0DBUF = c;
@@ -766,7 +801,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 // mov	_U0DBUF, r1	//		U0DBUF = c;
 //1005$:	jnb	_UTX0IF, 1005$
 // clr	_UTX0IF
-					//	l = ((8+HDR_SIZE+5) & 0x0f )==0 ? (8+HDR_SIZE+5): ((8+HDR_SIZE+5)&0xf0) + 0x10;
+					//	l = ((8+HDR_SIZE+6) & 0x0f )==0 ? (8+HDR_SIZE+6): ((8+HDR_SIZE+6)&0xf0) + 0x10;
 		clr	a			// while (i < l) {
 0026$:						//		i++;
 			movx	@dptr, a//		*p++ = 0;

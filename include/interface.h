@@ -51,8 +51,10 @@ void rf_receive_on(void);
 void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
-extern u8 __xdata rtx_key;
+extern u8 __data rtx_key;
 extern void rf_set_mac(u8 __xdata *m);
+#define NO_CRYPTO	0xff
+#define SUOTA_KEY	0xfe
 extern void rf_send(packet __xdata* pkt, u8 len, u8 crypto, __xdata unsigned char *mac);
 #define	XMT_POWER_NEG_3DB	-3
 #define	XMT_POWER_0DB		0

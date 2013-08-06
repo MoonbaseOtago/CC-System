@@ -180,7 +180,6 @@ unsigned int  __pdata rsum;
 unsigned char  __pdata rcmd;
 unsigned char  __pdata rlen;
 unsigned char  __pdata cs0;
-unsigned char __data cur_key=0xff;
 
 void
 ser_putstr(char __code *cp)
@@ -271,8 +270,6 @@ static void uart_rcv_thread(task __xdata*t)
 				break;
 			case PKT_CMD_RCV_ON:
 				rf_receive_on();
-				cur_key = r[0]&7;
-				rf_set_key(&keys[cur_key][0]);
 				break;
 			case PKT_CMD_SET_CHANNEL:
 				rf_set_channel(r[0]);
@@ -284,10 +281,10 @@ static void uart_rcv_thread(task __xdata*t)
 				rf_set_mac(&r[0]);
 				break;
 			case PKT_CMD_SEND_PACKET:
-				rf_send((packet __xdata*)&r[0], rlen, 0, 0);
+				rf_send((packet __xdata*)&r[0], rlen, NO_CRYPTO, 0);
 				break;
 			case PKT_CMD_SEND_PACKET_MAC:
-				rf_send((packet __xdata*)&r[8], rlen-8, 0, &r[0]);
+				rf_send((packet __xdata*)&r[8], rlen-8, NO_CRYPTO, &r[0]);
 				break;
 			case PKT_CMD_SET_PROMISCUOUS:
 				rf_set_promiscuous(r[0]);
@@ -298,19 +295,11 @@ static void uart_rcv_thread(task __xdata*t)
 			default:
 				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT && rcmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {
 					int t = rcmd-PKT_CMD_SEND_PACKET_CRYPT;
-					if (cur_key != t) {
-						cur_key = t;
-						rf_set_key(&keys[t][0]);
-					}
-					rf_send((packet __xdata*)&r[0], rlen, 1, 0);
+					rf_send((packet __xdata*)&r[0], rlen, t, 0);
 				} else
 				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT_MAC && rcmd < (PKT_CMD_SEND_PACKET_CRYPT_MAC+8)) {					   
 					int t = rcmd-PKT_CMD_SEND_PACKET_CRYPT_MAC;
-					if (cur_key != t) {
-						cur_key = t;
-						rf_set_key(&keys[t][0]);
-					}
-					rf_send((packet __xdata*)&r[8], rlen-8, 1, &r[0]);
+					rf_send((packet __xdata*)&r[8], rlen-8, t, &r[0]);
 				}
 				break;
 			}
@@ -471,6 +460,26 @@ send_printf_xdata(char  __xdata *cp)
 	EA = 1;
 }
 
+char __xdata hex_tmp[3];
+
+char
+htoc(u8 v)
+{
+	v &=0xf;
+	if (v < 10)
+		return '0'+v;
+	return ('a'-10)+v;
+}
+void
+send_hex(u8 v)
+{
+	hex_tmp[0] = htoc(v>>4);
+	hex_tmp[1] = htoc(v);
+	hex_tmp[2] = 0;
+	send_printf_xdata(&hex_tmp[0]);
+}
+
+
 static void
 uart_setup()
 {
@@ -507,8 +516,7 @@ static unsigned int my_app(unsigned char op)
 	case APP_GET_MAC:
 		return 0;
 	case APP_GET_KEY:
-		if (cur_key != 0xff)
-			rf_set_key(&keys[cur_key][0]);
+		rf_set_key(&keys[rtx_key][0]);
 		break;
 	case APP_RCV_PACKET:
 		send_rcv_packet();

@@ -71,11 +71,19 @@ We have a bunch of routines for sending packets and controlling the RF interface
 	void rf_set_key(u8 *key);	// set the 16-byte send/receive crypto key
 	void rf_set_mac(u8 *key);	// set the 8-byte mac
 
-	void rf_send(packet __xdata* pkt, u8 len, u8 crypto, u8 __xdata*mac);
+	#define NO_CRYPTO 0xff
+	extern u8 __data rtx_key;
+	void rf_send(packet __xdata* pkt, u8 len, u8 crypto_key, u8 __xdata*mac);
 
-rf_rend() sends a packet of length len, and applies crypto if requested using the last key set - no
-guarantee is provided that a data gram will be received. The packet must be stored in __xdata. The 'mac' argument can be NULL, if so a broadcast packet will be sent, otherwise a 64-bit MAC address is required.
+rf_rend() sends a packet of length len, and applies crypto if requested using the supplied key number - use
+'NO_CRYPTO' if you don't want the packet encrypted - key numbers must be less than or equal to 0x7f.
+Key changes are done at theapp level whenever the RF layer needs to switch keys it will call your app
+with APP_GET_KEY - in response you must call rf_set_key using the value in rtx_key to choose a key
+(it's quite valid to just return a single key to all calls if that's what you need).
 
+No guarantee is provided that a data gram will be received. The packet must be stored in __xdata.
+
+The 'mac' argument can be NULL, if so a broadcast packet will be sent, otherwise a 64-bit MAC address is required.
 
 The packet format we use is optional - you can use anything you like - however of you want to
 use software update over the air you'll have to play nice and use it since the SUOTA protocol uses it.
@@ -163,7 +171,7 @@ get out, as fast as you can - these calls are made from task callout routines:
 			//
 			return (void *)&mac;
 		case APP_GET_KEY:
-			extern u8 __xdata rtx_key;
+			extern u8 __data rtx_key;
 			//
 			//	this is a request for you to set the 16 byte aes key number 
 			//	selected by rtx_key by calling rf_set_key();
@@ -174,23 +182,25 @@ get out, as fast as you can - these calls are made from task callout routines:
 			{
 				// these are defined in interface.h, locations may change
 				extern u8 __data rx_len;
-				extern u8 __data rx_status[2];
 				extern packet __xdata  * __data rx_packet;
 				extern u8 __xdata  * __data rx_mac;
 				extern __bit rx_crypto;
 				extern __bit rx_broadcast;
+				extern u8 rtx_key;
 			
 				//
 				// rx_len bytes are stored pointed to by rx_packet;
-				//	if rx_crypto is set the packet was encrypted 
-				//	(and passed, bad crypto'd packets are discarded)
-				//	rx_status are the status bytes from the receiver
+				//
+				// if rx_crypto is set the packet was encrypted 
+				//	(and passed, bad crypto'd packets are discarded
+				//	if it was encrypted rtx_key contains the key used
+				//	to decrypt it)
 				//
 				//  if rx_broadcast is true the packet was sent as a broadcast
 				//
 				//  rx_mac is the mac address of the packet sender
 				//
-				// when called the receiver is still running but can only buffer 
+				//  when called the receiver is still running but can only buffer 
 				//	a packet or two (depends on length) so be quick
 				//
 			}
