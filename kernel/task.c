@@ -399,10 +399,10 @@ void queue_task_0(task __xdata * t) __naked	// for ISRs - save param so we don't
 	acall	_queue_task
 	mov	r0, #_queue_task_PARM_2	
 	pop	ACC
-	mov	@r0, a
+	movx	@r0, a
 	inc	r0
 	pop	ACC
-	mov	@r0, a
+	movx	@r0, a
 	ret
 	__endasm;
 }
@@ -924,7 +924,6 @@ main()
 	suota_setup();
 	rf_init();
 	(*x_app)(APP_INIT);
-
 #ifdef XMT
 	queue_task(&test_task4,  1*HZ);
 #endif
