@@ -51,7 +51,7 @@ void rf_receive_on(void);
 extern void putstr (const char __code*);
 extern void puthex (unsigned char );
 __xdata __at (0x616A)  u8 IEEE_MAC[8];
-static void _aes_op();	// version with reg wrap;per
+static void aes_done();
 
 static __code unsigned char default_mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
 
@@ -62,6 +62,141 @@ extern void pf(const char __code *);
 extern void pd(unsigned char __xdata *, u8);
 extern void pdd(unsigned char __pdata *, u8);
 extern void ph(u8);
+void x_ps() __naked 
+{
+	__asm;
+	push	_DPL1
+	push	_DPH1
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
+	lcall	_ps
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
+	pop	_DPH1
+	pop	_DPL1
+	ret
+	__endasm;
+}
+void x_pf() __naked 
+{
+	__asm;
+	push	_DPL1
+	push	_DPH1
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
+	lcall	_pf
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
+	pop	_DPH1
+	pop	_DPL1
+	ret
+	__endasm;
+}
+void x_pd() __naked 
+{
+	__asm;
+	push	_DPL1
+	push	_DPH1
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
+	lcall	_pd
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
+	pop	_DPH1
+	pop	_DPL1
+	ret
+	__endasm;
+}
+void x_pdd() __naked 
+{
+	__asm;
+	push	_DPL1
+	push	_DPH1
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
+	lcall	_pdd
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
+	pop	_DPH1
+	pop	_DPL1
+	ret
+	__endasm;
+}
+void x_ph() __naked 
+{
+	__asm;
+	push	_DPL1
+	push	_DPH1
+	push	ar0
+	push	ar1
+	push	ar2
+	push	ar3
+	push	ar4
+	push	ar5
+	push	ar6
+	push	ar7
+	lcall	_ph
+	pop	ar7
+	pop	ar6
+	pop	ar5
+	pop	ar4
+	pop	ar3
+	pop	ar2
+	pop	ar1
+	pop	ar0
+	pop	_DPH1
+	pop	_DPL1
+	ret
+	__endasm;
+}
 #else
 #define ps(x)
 #define ph(x)
@@ -74,6 +209,7 @@ rf_set_key(u8 __xdata * key)
 {
     u8 i;
 ps("key=");pd(key, 16);pf("\n");
+    aes_done();
     ENCCS = (ENCCS & ~0x07) | 0x04;	// AES_LOAD_KEY
     ENCCS |= 0x01;			// start
     for (i=0; i<16; i++) 
@@ -98,8 +234,8 @@ rf_set_mac(u8 __xdata *m)
 	u8 i;
 	for (i = 0; i < 6; i++)
 		IEEE_MAC[i] = m[i];
-	nonce_tx[8] = IEEE_MAC[6] = rf_id[0] = m[6];
-	nonce_tx[7] = IEEE_MAC[7] = rf_id[1] = m[7];
+	nonce_tx[7] = IEEE_MAC[6] = rf_id[0] = m[6];
+	nonce_tx[8] = IEEE_MAC[7] = rf_id[1] = m[7];
 }
 
 void
@@ -145,8 +281,8 @@ rf_init(void)
     nonce_rx[13] = 6;
     nonce_tx[0] = 9;
     nonce_tx[13] = 6;
-    nonce_tx[8] = rf_id[0] = IEEE_MAC[6];
-    nonce_tx[7] = rf_id[1] = IEEE_MAC[7];
+    nonce_tx[7] = rf_id[0] = IEEE_MAC[6];
+    nonce_tx[8] = rf_id[1] = IEEE_MAC[7];
 
     // generate rf_id  XXX
     
@@ -200,79 +336,307 @@ rf_receive_off(void)
 #define AES_MODE_ECB    0x40
 #define AES_MODE_CBCMAC 0x50
 
-static void
-aes_op(u8 __xdata* p, u8 op, u8 len, u8 __xdata *pOut, u8 __pdata*iv)
+static void aes_done() __naked
 {
-	u8 blocks, j, k, mode, b;
+	__asm;
+0001$:	mov	a, _ENCCS
+	jnb	_ACC_3, 0001$
+	ret
+	__endasm;
+}
 
-	blocks = (len+15)&0xf0;
-	mode = ENCCS&~0x7;
-	ENCCS = mode|AES_LOAD_IV;
-	ENCCS |= 0x01;
-ps("iv=");pdd(iv, 16);pf("\n");
-	for(j = 0; j < 16; j++)
-      		ENCDI = *iv++;
+static void
+aes_op_ctr() __naked	//u8 __xdata* p, u8 op, u8 len, u8 __xdata *pOut, u8 __pdata*iv) 
+{
+	// r0 = tmp
+	// r1 = encrypt/decrypt
+	// r7 = len
+	// r6 = tmp
+	// dptr = p
+	// dptr1 = pout
+	__asm;				//	u8 blocks, j, k, mode, b;
+					//	ENCCS &= ~0x7;
+	
+					//	ENCCS |= AES_MODE_CTR;
+	mov	_ENCCS, #AES_MODE_CTR|AES_LOAD_IV
+					//	mode = ENCCS&~0x7;
+					//	ENCCS = mode|AES_LOAD_IV;
+#ifdef RDEBUG
+				sjmp	0201$
+0202$:				.ascii "iv="
+				.db 0x00
+0203$:				.db 0x0A
+				.db 0x00
+0205$:				.ascii "data="
+				.db 0x00
+0206$:				.ascii "out="
+				.db 0x00
+0204$:				.ascii "CTR len="
+				.db 0x00
+0210$:				.ascii " "
+				.db 0x00
+0201$:				push	_DPL1
+				push	_DPH1
+				push	dpl
+				push	dph
+				mov	dptr, #0202$		//	ps("iv=");pdd(iv, 16);pf("\n");
+				lcall	_x_ps
+				mov	dpl, #_iv
+				mov	r0, #_pdd_PARM_2
+				mov	a, #16
+				movx	@r0, a
+				lcall	_x_pdd
+				mov	dptr, #0203$
+				lcall	_x_pf
+#endif
+	orl	_ENCCS, #1		//	ENCCS |= 0x01;
+	mov	r6, #16
+	mov	r0, #_iv
+0001$:		movx	a, @r0		//	for(j = 0; j < 16; j++)
+		mov	_ENCDI, a	//		ENCDI = *iv++;
+		inc	r0
+		djnz	r6, 0001$
+	
+	mov	a, r7			//	blocks = (len+15)&0xf0;
+	add	a, #15
+	swap	a	
+	anl	a, #0xf
+	mov	r6, a
+					//	ENCCS = mode|op;
+ 	lcall	_aes_done
+	mov	_ENCCS, r1
+#ifdef RDEBUG
+					//	ps("mode1=");ph(mode);ps(" len=");ph(len);pf("\n");
+				mov	dpl, _ENCCS
+				lcall	_x_ph
+				mov	dptr, #0204$
+				lcall	_x_ps
+				mov	dpl, r7
+				lcall	_x_ph
+				mov	dptr, #0210$
+				lcall	_x_ps
+				mov	dpl, r6
+				lcall	_x_ph
+				mov	dptr, #0203$
+				lcall	_x_pf
+					//	ps("data=");pd(p, len);pf("\n");
+				mov	dptr, #0205$
+				lcall	_x_ps
+				pop	dph
+				pop	dpl
+				push	dpl
+				push	dph
+				mov	r0, #_pd_PARM_2
+				mov	a, r7
+	add	a, #15
+	anl	a, #0xf0
+				movx	@r0, a
+				lcall	_x_pd
+				mov	dptr, #0203$
+				lcall	_x_pf
+				pop	dph
+				pop	dpl
+#endif
+0003$:					//	for (b = 0; b < blocks; b+=16) {
+ 		lcall	_aes_done
+		orl	_ENCCS, #1	//		ENCCS |= 0x01;
+		mov	r1, #4		//		for (j=0; j < 16; j+=4) {
+		
+0002$:            	movx	a, @dptr//			for (k=0; k < 4; k++) 
+               		mov	_ENCDI, a//				ENCDI = (b+j+k) < len?p[b+j+k]:0x00;
+			inc	dptr
+            		movx	a, @dptr
+               		mov	_ENCDI, a
+			inc	dptr
+            		movx	a, @dptr
+               		mov	_ENCDI, a
+			inc	dptr
+            		movx	a, @dptr
+               		mov	_ENCDI, a
+			inc	dptr
 
-	ENCCS = mode|op;
-	mode &= 0x70;
+			inc	_DPS
+			mov	a, _ENCDO//			*pOut++ = ENCDO;
+			movx	@dptr, a
+			inc	dptr
+			mov	a, _ENCDO//			*pOut++ = ENCDO;
+			movx	@dptr, a
+			inc	dptr
+			mov	a, _ENCDO//			*pOut++ = ENCDO;
+			movx	@dptr, a
+			inc	dptr
+			mov	a, _ENCDO//			*pOut++ = ENCDO;
+			movx	@dptr, a
+			inc	dptr
+			dec	_DPS
+			djnz	r1, 0002$//		}
+		djnz	r6, 0003$	//	}
+ 		lcall	_aes_done
+#ifdef RDEBUG				//	ps("out=");pd(pOut-b, b);pf("\n");
+				mov	dpl, _ENCCS
+				lcall	_x_ph
+				mov	dptr, #0206$
+				lcall	_x_ps
+				pop	dph
+				pop	dpl
+				mov	r0, #_pd_PARM_2
+				mov	a, r7
+	add	a, #15
+	anl	a, #0xf0
+				movx	@r0, a
+				lcall	_x_pd
+				mov	dptr, #0203$
+				lcall	_x_pf
+#endif
+	ret			
+	__endasm;			
+}
 
-	if (mode==AES_MODE_CTR || mode==AES_MODE_CFB || mode==AES_MODE_OFB) {
-ps("mode1=");ph(mode);ps(" len=");ph(len);pf("\n");
-ps("data=");pd(p, len);pf("\n");
-		for (b = 0; b < blocks; b+=16) {
-			ENCCS |= 0x01;
-			for (j=0; j < 16; j+=4) {
-            			for (k=0; k < 4; k++) 
-               				ENCDI = (b+j+k) < len?p[b+j+k]:0x00;
-				*pOut++ = ENCDO;
-				*pOut++ = ENCDO;
-				*pOut++ = ENCDO;
-				*pOut++ = ENCDO;
-			}
-		}
-ps("out=");pd(pOut-b, b);pf("\n");
-	} else
-	if (mode == AES_MODE_CBCMAC){
-ps("mode2=");ph(mode);pf("\n");
-ps("data=");pd(p, len);pf("\n");
-		for (b = 0; b < blocks; b+=16) {
-			ENCCS |= 0x01;
-			for (j=0; j < 16; j++)
-            			ENCDI = (b+j) < len?p[b+j]:0x00;
-			if (b == (blocks-32)) {
-				ENCCS &= ~0x70;
-				ENCCS |= AES_MODE_CBC;
-				wait_us(1);
-			} else
-			if (b == (blocks-16)) {
-				wait_us(1);
-				for (j=0; j < 16; j++)
-					*pOut++ = ENCDO;
-			}
-		}
-ps("out=");pd(pOut-16, 16);pf("\n");
-	} else {
-ps("mode3=");ph(mode);pf("\n");
-ps("data=");pd(p, len);pf("\n");
-		for (b = 0; b < blocks; b+=16) {
-			ENCCS |= 0x01;
-			for(j=0; j < 16; j++)
-            			ENCDI = (b+j) < len?p[b+j]:0x00;
-			wait_us(1);
-			for(j=0; j < 16; j++)
-				*pOut++ = ENCDO;
-		}
-ps("out=");pd(pOut-b, b);pf("\n");
-	}
+static void
+aes_op_cbc_mac() __naked	//u8 __xdata* p, u8 op, u8 len, u8 __xdata *pOut, u8 __pdata*iv) 
+{
+	__asm;				//	u8 blocks, j, k, mode, b;
+	// r0 = tmp
+	// r1 = tmp/decrypt
+	// r7 = len
+	// r6 = tmp
+	// dptr = p
+	// dptr1 = pout
+					//	ENCCS &= ~0x7;
+					//	ENCCS |= AES_MODE_CTR;
+	mov	_ENCCS, #AES_MODE_CBCMAC|AES_LOAD_IV
+					//	mode = ENCCS&~0x7;
+					//	ENCCS = mode|AES_LOAD_IV;
+					//	ps("iv=");pdd(iv, 16);pf("\n");
+#ifdef RDEBUG
+				sjmp	0201$
+0202$:				.ascii "iv="
+				.db 0x00
+0203$:				.db 0x0A
+				.db 0x00
+0205$:				.ascii "data="
+				.db 0x00
+0210$:				.ascii " "
+				.db 0x00
+0206$:				.ascii "out="
+				.db 0x00
+0204$:				.ascii "CBC_MAC len="
+				.db 0x00
+0201$:				push	_DPL1
+				push	_DPH1
+				push	dpl
+				push	dph
+				mov	dptr, #0202$		//	ps("iv=");pdd(iv, 16);pf("\n");
+				lcall	_x_ps
+				mov	dpl, #_iv
+				mov	r0, #_pdd_PARM_2
+				mov	a, #16
+				movx	@r0, a
+				lcall	_x_pdd
+				mov	dptr, #0203$
+				lcall	_x_pf
+#endif
+	orl	_ENCCS, #1		//	ENCCS |= 0x01;
+	mov	r6, #16
+	mov	r0, #_iv
+0001$:		movx	a, @r0		//	for(j = 0; j < 16; j++)
+		mov	_ENCDI, a	//		ENCDI = *iv++;
+		inc	r0
+		djnz	r6, 0001$
+
+	mov	a, r7			//	blocks = (len+15)&0xf0;
+	add	a, #15
+	swap	a	
+	anl	a, #0xf
+	mov	r6, a
+					//	ENCCS = mode|op;
+ 	lcall	_aes_done
+	mov	_ENCCS, #AES_ENCRYPT|AES_MODE_CBCMAC
+#ifdef RDEBUG
+					//	ps("mode2=");ph(mode);ps(" len=");ph(len);pf("\n");
+				mov	dpl, _ENCCS
+				lcall	_x_ph
+				mov	dptr, #0204$
+				lcall	_x_ps
+				mov	dpl, r7
+				lcall	_x_ph
+				mov	dptr, #0210$
+				lcall	_x_ps
+				mov	dpl, r6
+				lcall	_x_ph
+				mov	dptr, #0203$
+				lcall	_x_pf
+					//	ps("data=");pd(p, len);pf("\n");
+				mov	dptr, #0205$
+				lcall	_x_ps
+				pop	dph
+				pop	dpl
+				push	dpl
+				push	dph
+				mov	r0, #_pd_PARM_2
+				mov	a, r7
+				add	a, #15
+				anl	a, #0xf0
+				movx	@r0, a
+				lcall	_x_pd
+				mov	dptr, #0203$
+				lcall	_x_pf
+				pop	dph
+				pop	dpl
+#endif
+0002$:					//	for (b = 0; b < blocks; b+=16) {
+ 		lcall	_aes_done
+		orl	_ENCCS, #1	//		ENCCS |= 0x01;
+		mov	r7, #16		//		for (j=0; j < 16; j++)
+0003$:			movx	a, @dptr//            		ENCDI = (b+j) < len?p[b+j]:0x00;
+			mov	_ENCDI, a
+			inc	dptr
+			djnz	r7, 0003$
+			
+		cjne	r6, #2, 0004$	//		if (b == (blocks-32)) {
+					//			ENCCS &= ~0x70;
+ 			lcall	_aes_done
+			//anl	_ENCCS, #~0x70//			ENCCS |= AES_MODE_CBC;
+			//orl	_ENCCS, #AES_MODE_CBC
+			mov	_ENCCS, #AES_ENCRYPT|AES_MODE_CBC
+0005$:			djnz	r6, 0002$//		} else
+0004$:		cjne	r6, #1, 0005$	//		if (b == (blocks-16)) {
+			mov	r0, #32//			wait_us(1);
+0011$:				djnz	r0, 0011$
+			mov	r7, #16	//			for (j=0; j < 16; j++)
+			inc	_DPS
+0006$:				mov	a, _ENCDO//			*pOut++ = ENCDO;
+				movx	@dptr, a
+				inc	dptr
+				djnz	r7, 0006$
+			dec	_DPS
+#ifdef RDEBUG				//      ps("out=");pd(pOut-16, 16);pf("\n");
+				mov	dpl, _ENCCS
+				lcall	_x_ph
+				mov	dptr, #0206$
+				lcall	_x_ps
+				pop	dph
+				pop	dpl
+				mov	r0, #_pd_PARM_2
+				mov	a, #16
+				movx	@r0, a
+				lcall	_x_pd
+				mov	dptr, #0203$
+				lcall	_x_pf
+#endif
+			ret		//		}
+					//	}
+	__endasm;
 }
 
 #define	LM  ((1<<((2&3)+1))&~3)
 #define HDR_SIZE (2+1+2+2+8) 
 static u8 __xdata* __data rx_data;
 void
-rcv_handler(task __xdata* ppp)
+rcv_handler(task __xdata* ppp) __naked
 {
-	u8 hdr;
+	__asm;
+	// u8 hdr;
 // data points to
 //	0:	2 fxf
 //	2:	1 seq
@@ -282,148 +646,405 @@ rcv_handler(task __xdata* ppp)
 //	15:	data 
 //
 // for crypto packets
-//	15:	1 '6'
+//	15:	1 '0xe'
 //	16:	4 frame counter
-//	20:	data
+//	20:	key number
+//	21:	data
 //	n-8:	8 crypto
 //
+0001$:						//	for(;;) {
+	jnb	_rx_rset, 0002$			//		if (rx_rset) {
+		jb	_rx_busy1, 0003$	//			if (!rx_busy1)
+0006$:			ret			//				return;
+0003$:		mov	dptr, #_rx_data1	//			rx_data = &rx_data1[0];
+		mov	_rx_len, _rx_len1	//			rx_len = rx_len1;
+		sjmp	0004$			//		} else {
+0002$:		jnb	_rx_busy0, 0006$	//			if (!rx_busy0)
+						//				return;
+		mov	dptr, #_rx_data0	//			rx_data = &rx_data0[0];
+		mov	_rx_len, _rx_len0	//			rx_len = rx_len0;
+0004$:		mov	_rx_data, dpl 		//		}
+		mov	_rx_data+1, dph
 
-	for(;;) {
-		if (rx_rset) {
-			if (!rx_busy1)
-				return;
-			rx_data = &rx_data1[0];
-			rx_len = rx_len1;
-		} else {
-			if (!rx_busy0)
-				return;
-			rx_data = &rx_data0[0];
-			rx_len = rx_len0;
-		}
-		if (rx_data[1]&(1<<2)) {	// mac dest
-			hdr = HDR_SIZE-2+8;
-			rx_mac = &rx_data[5+8];
-			rx_broadcast = 0;	
-		} else {
-			hdr = HDR_SIZE;
-			rx_mac = &rx_data[5+2];
-			rx_broadcast = 1;
-		}
-		if (rx_data[0]&(1<<3) && !rx_raw) { 	// encrypted?
-			u8 c, i, l;
-			u8 __xdata* p;
-			u8 __xdata* p2;
+		movx	a, @dptr
+		mov	r0, a
+		inc	dptr
+		movx	a, @dptr
+		jnb	_ACC_2, 0007$		//		if (rx_data[1]&(1<<2)) {	// mac dest
+			clr	_rx_broadcast	//			rx_broadcast = 0;	
+			mov	r2, #HDR_SIZE-2+8+6//			hdr = HDR_SIZE-2+8;
+						//			rx_mac = &rx_data[5+8];
+			mov	a, #5+8-1
+						//		} else {
+0007$:			mov	r2, #HDR_SIZE+6	//			hdr = HDR_SIZE;
+			setb	_rx_broadcast	//			rx_broadcast = 1;
+						//			rx_mac = &rx_data[5+2];
+			mov	a, #5+2-1
+0010$:		add     a, dpl
+		mov	_rx_mac, a
+		clr	a
+		addc	a, dph
+		mov	_rx_mac+1, a
+
+		mov	a, r0
+		jb	_ACC_3, 0011$		//		if (rx_data[0]&(1<<3) && !rx_raw) { 	// encrypted?	
+0013$:			ljmp	0012$
+0011$:			jb	_rx_raw, 0013$	//			u8 c, i, l;
+						//			u8 __xdata* p;
+						//			u8 __xdata* p2;
 			//
 			// len = rx_len - header len -2 length of data + crypto
 			// c = rx_len-5-8	// length of data
 			// f = 15+6	// length up to start of data
 			// m = 2
-	//putchar('a');
-ps("RECV=");pd(rx_data, rx_len);pf("\n");
-ps("HD=");ph(rx_data[hdr]);pf("\n");
-			if (rx_data[hdr] != (6|(1<<3)))
-				goto done;
-			if (rtx_key != rx_data[hdr+5]) {
-				rtx_key = rx_data[hdr+5];
-				app(APP_GET_KEY);
-			}
-			nonce_rx[9] = rx_data[hdr+1];
-			nonce_rx[10] = rx_data[hdr+2];
-			nonce_rx[11] = rx_data[hdr+3];
-			nonce_rx[12] = rx_data[hdr+4];
-			nonce_rx[8] = rx_mac[6];
-			nonce_rx[7] = rx_mac[7];
-			iv[0] = 1;
-			memcpy(&iv[1], &nonce_rx[1], 14);
-			iv[15] = 0;
+			mov	a, _rx_mac	//			nonce_rx[7] = rx_mac[6];
+			add	a, #6
+			mov	dpl, a
+			clr	a
+			addc	a, _rx_mac+1
+			mov	dph, a
+			mov	r1, #_nonce_rx+7
+			movx	a, @dptr
+			movx	@r1, a
+			inc	dptr
+			inc 	r1
+			movx    a, @dptr	//			nonce_rx[8] = rx_mac[7];
+			movx	@r1, a		
+			inc	r1
+
+			mov	a, r2
+			add	a, #-6
+			add	a, _rx_data	//			if (rx_data[hdr] != (6|(1<<3)))
+			mov	dpl, a
+			clr	a
+			addc	a, _rx_data+1
+			mov	dph, a
+			movx	a, @dptr
+			add	a, #-(6|(1<<3))
+			jz	0014$
+				ljmp	0703$	//				goto done;	// $703
+0014$:
+			inc	dptr
+			mov	r7, #4
+0114$:
+				movx	a, @dptr//			nonce_rx[9] = rx_data[hdr+1];	
+				movx	@r1, a	//			nonce_rx[10] = rx_data[hdr+2];
+				inc	dptr	//			nonce_rx[11] = rx_data[hdr+3];
+				inc 	r1	//			nonce_rx[12] = rx_data[hdr+4];
+				djnz	r7, 0114$
+			movx	a, @dptr	//			if (rtx_key != rx_data[hdr+5]) {
+			cjne	a, _rtx_key, 0015$
+				sjmp	0016$
+0015$:
+				mov	_rtx_key, a//				rtx_key = rx_data[hdr+5];
+				mov	dpl, #APP_GET_KEY//			app(APP_GET_KEY);
+				push	ar2
+				mov	a,#0017$
+				push	acc
+				mov	a,#(0017$ >> 8)
+				push	acc
+				push	_x_app
+				push	_x_app+1
+				ret
+0017$:				pop	ar2
+0016$:						//			}
+			mov	r0, #_iv	//			iv[0] = 1;
+			mov	a, #1
+			movx	@r0, a
+			inc 	r0
+			mov	r1, #_nonce_rx+1//			memcpy(&iv[1], &nonce_rx[1], 14);
+			mov	r3, #14
+0020$:				movx	a, @r1
+				movx	@r0, a
+				inc	r0
+				inc	r1
+				djnz	r3, 0020$
+			clr	a		//			iv[15] = 0;
+			movx	@r0, a
+
+#ifdef RDEBUG
+				sjmp	0201$
+0202$:				.ascii "rcv="
+				.db 0x00
+0203$:				.db 0x0A
+				.db 0x00
+0201$:				mov	dptr, #0202$		//	ps("iv=");pdd(iv, 16);pf("\n");
+				lcall	_x_ps
+				mov	dpl, _rx_data
+				mov	dph, _rx_data+1
+				mov	r0, #_pd_PARM_2
+				mov	a, _rx_len
+				movx	@r0, a
+				lcall	_x_pd
+				mov	dptr, #0203$
+				lcall	_x_pf
+#endif
+			mov	a, _rx_len
+			add	a, #-8
+			add	a, _rx_data		//		aes_op(&rx_data[rx_len-8], AES_DECRYPT, LM, tmp, iv);
+			mov	dpl, a
+			clr 	a
+			addc	a, _rx_data+1
+			mov	dph, a			
+			mov	r1, #AES_DECRYPT|AES_MODE_CTR
+			mov	r7, #LM
+			mov	_DPL1, #_tmp
+			mov	_DPH1, #(_tmp)>>8
+			lcall	_aes_op_ctr
+
+			mov	a, _rx_len		//		memcpy(&rx_data[rx_len-8], tmp, LM);
+			add	a, #-8
+			add	a, _rx_data
+			mov	_DPL1, a
+			clr	a
+			addc	a, _rx_data+1
+			mov	_DPH1, a
+			mov	dptr, #_tmp
+			mov	r0, #LM
+0121$:				movx	a, @dptr
+				inc	dptr
+				inc	_DPS
+				movx	@dptr, a
+				inc	dptr
+				dec	_DPS
+				djnz	r0, 0121$
+
+			mov	a, _rx_len		//		c = rx_len-8-6-hdr;
+			add	a, #-8
+			clr	c
+			subb	a, r2
+			mov	r3, a	// r3 is c
+			mov	r0, a
+			mov	_DPL1, #_cipher		//		memcpy(&cipher[0], &rx_data[hdr+6], c);
+			mov	_DPH1, #_cipher>>8
+			mov	a, r2
+			add	a, _rx_data
+			mov	dpl, a
+			clr	a
+			addc	a, _rx_data+1
+			mov	dph, a
+0021$:				movx	a, @dptr
+				inc	dptr
+				inc	_DPS
+				movx	@dptr, a
+				inc	dptr
+				dec	_DPS
+				djnz	r0, 0021$
+
+			mov	a, r3			//		l = (c+15)&0xf0;
+			add	a, #15
+			anl	a, #0xf0
+			clr	c
+			subb	a, r3
+			jz	0023$
+			mov	r0, a
+			inc	_DPS
+			clr 	a
+0022$:				movx	@dptr, a	//		for (i=c; i<l; i++)
+				inc	dptr		//			*p++ = 0; 
+				djnz	r0, 0022$
+			dec	_DPS
+0023$:
+			mov	r0, #_iv+15		//		iv[15]= 1;
+			inc	a // #1
+			movx	@r0, a
+			
+
+			mov	dptr, #_cipher		//		aes_op(&cipher[0], AES_DECRYPT, c, tmp, iv);
+			mov	r7, ar3
+			mov	_DPL1, #_tmp
+			mov	_DPH1, #(_tmp)>>8
+			mov	r1, #AES_DECRYPT|AES_MODE_CTR
+			lcall	_aes_op_ctr
+
+			mov	a, r2			//		memcpy(&rx_data[hdr+6], &tmp[0], c);
+			add	a, _rx_data
+			mov	dpl, a
+			clr	a
+			addc	a, _rx_data+1
+			mov	dph, a
+			inc	_DPS
+			mov	dptr, #_tmp
+			mov	r0, ar3
+0024$:				movx	a, @dptr
+				inc	dptr
+				dec	_DPS
+				movx	@dptr, a
+				inc	dptr
+				inc	_DPS
+				djnz	r0, 0024$
+
+			dec	_DPS
+			mov	dptr, #_tmp
+			mov	a, #0x41 | ((LM-2)/2)<<3//		tmp[0] = 0x41 | ((LM-2)/2)<<3;
+			movx	@dptr, a
+			inc	dptr
+			mov	r0, #_nonce_rx+1
+			mov	r1, #13			//		memcpy(&tmp[1], &nonce_rx[1], 13);
+0025$:				movx	a, @r0
+				inc	r0
+				movx	@dptr, a
+				inc	dptr
+				djnz	r1, 0025$
+			clr	a			//		tmp[14] = 0;
+			movx	@dptr, a
+                        inc 	dptr
+			mov	a, r3			//		tmp[15] = c;
+			movx	@dptr, a
+                        inc 	dptr
+			clr	a 			//		tmp[16] = 0;
+			movx	@dptr, a
+                        inc 	dptr
+			mov	a, r2			//		tmp[17] = hdr+6;
+			movx	@dptr, a
+			mov	r0, a
+			add	a, #18
+			mov	r1, a	// i
+			add	a, #15
+			anl	a, #0xf0
+			mov	r4, a	// l
+                        inc 	dptr
+			inc	_DPS			//		memcpy(&tmp[18], &rx_data[0], hdr+6);
+			mov	_DPL1, _rx_data
+			mov	_DPH1, _rx_data+1
+0026$:				movx	a, @dptr
+				inc	dptr
+				dec	_DPS
+				movx	@dptr, a
+				inc	dptr
+				inc	_DPS
+				djnz	r0, 0026$
+			dec	_DPS
+					// r1 		//		i = 18+hdr+6;
+					// r4		//		l = (18+hdr+6+15)&0xf0;
+					// dptr		//		p = &tmp[i];
+			mov	a, r4			//		while (i < l) {
+			clr	c
+			subb	a, r1
+			jz	0027$
+			mov	r0, a
+			clr	a
+0030$:				movx	@dptr, a	//			i++;
+				inc	dptr		//			*p++ = 0;
+				djnz	r0, 0030$	//		}
+0027$:
+			mov	a, _rx_data		//		p2 = &rx_data[hdr+6];
+			add	a, r2
+			mov	_DPL1, a
+			mov	_rx_packet, a	// see below
+			clr	a
+			addc	a, _rx_data+1
+			mov	_DPH1, a
+			mov	_rx_packet+1, a
+
+			mov	a, r4			//		l += c;
+			add	a, r3
+			mov	r4, a
 	
-	//putchar('b');
-			ENCCS &= ~0x70;
-			ENCCS |= AES_MODE_CTR;
-			aes_op(&rx_data[rx_len-8], AES_DECRYPT, LM, tmp, iv);
-	//putchar('c');
-			memcpy(&rx_data[rx_len-8], tmp, LM);
-	//putchar('d');
-	
-			c = rx_len-8-6-hdr;
-	//putchar('e');
-			memcpy(&cipher[0], &rx_data[hdr+6], c);
-			p = &cipher[c];
-			l = (c+15)&0xf0;
-			for (i=c; i<l; i++)
-				*p++ = 0; 
-			iv[15]= 1;
-			ENCCS &= ~0x70;
-			ENCCS |= AES_MODE_CTR;
-	//putchar('f');
-			aes_op(&cipher[0], AES_DECRYPT, c, tmp, iv);
-	//putchar('g');
-			memcpy(&rx_data[hdr+6], &tmp[0], c);
-	//putchar('h');
-	
-			tmp[0] = 0x41 | ((LM-2)/2)<<3;
-			memcpy(&tmp[1], &nonce_rx[1], 13);
-			tmp[14] = 0;
-			tmp[15] = c;
-			tmp[16] = 0;
-			tmp[17] = hdr+6;
-			memcpy(&tmp[18], &rx_data[0], hdr+6);
-	//putchar('i');
-			i = 18+hdr+6;
-			l = (18+hdr+6+15)&0xf0;
-			p = &tmp[i];
-			while (i < l) {
-				i++;
-				*p++ = 0;
-			}
-	//putchar('j');
-			p2 = &rx_data[hdr+6];
-			l += c;
-			while (i < l) {
-				*p++ = *p2++;
-				i++;
-			}
-	//putchar('k');
-			l = ((i+15)&0xf0) - i;
-			while (l) {
-				*p++ = 0;
-				l--;
-			}
-	//putchar('l');
-			memset(iv,0, sizeof(iv));
-			ENCCS &= ~0x70;
-                	ENCCS |= AES_MODE_CBCMAC;
-	//putchar('m');
-                	aes_op(&tmp[0], AES_ENCRYPT, i, &cipher[0], &iv[0]);
-	//putchar('n');
-			if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0)	// discard bogus packet
-				goto done;
-			rx_crypto = 1;
-			rx_packet = (packet __xdata *)&rx_data[hdr+6];
-			rx_len = c;
-			if (suota_enabled) {
-				if (incoming_suota_version(rx_packet))
-					return;
-				if  (rx_packet->type == P_TYPE_SUOTA_REQ || rx_packet->type == P_TYPE_SUOTA_RESP) {
-					incoming_suota_packet(rx_packet, rx_len);
-					return;
-				}
-			}
-		} else {
-			rx_crypto = 0;
-			rx_len -= hdr;
-			rx_packet = (packet __xdata *)&rx_data[hdr];
-		}
-		app(APP_RCV_PACKET);
-done:
-		if (rx_rset) {
-			rx_busy1 = 0;
-			rx_rset = 0;
-		} else {
-			rx_busy0 = 0;
-			rx_rset = 1;
-		}
-	}
+			mov	r0, ar3			//		while (i < l) {
+0031$:
+				inc	_DPS		//			*p++ = *p2++;
+				movx	a, @dptr	//			i++;
+				inc	dptr
+				dec	_DPS
+				movx	@dptr, a
+				inc	dptr
+				djnz	r0, 0031$	//		}
+
+			mov	a, r4			//		l = ((i+15)&0xf0) - i;
+			add	a, #15
+			anl	a, #0xf0
+			mov	r1, a
+			clr	c
+			subb	a, r4			//		while (l) {
+			jz	0032$
+			mov	r0, a
+			clr	a
+0033$:				movx	@dptr, a	//			*p++ = 0;
+				inc	dptr		//			l--;
+				djnz	r0, 0033$	//		}
+0032$:
+			mov	r0, #_iv		//		memset(iv,0, sizeof(iv));
+			mov	r5, #16
+			// a is 0
+0034$:				movx	@r0, a
+				inc	r0
+				djnz	r5, 0034$
+
+			mov	dptr, #_tmp		//		aes_op(&tmp[0], AES_ENCRYPT, i, &cipher[0], &iv[0]);
+			mov	r7, ar1
+			mov	_DPL1, #_cipher
+			mov	_DPH1, #(_cipher)>>8
+			lcall	_aes_op_cbc_mac
+
+			mov	r1, #LM			//		if (memcmp(&cipher[0], &rx_data[rx_len-8], LM) != 0)	// discard bogus packet
+			mov	dptr, #_cipher		//			goto done;	// $703
+			mov	a, _rx_len
+			add	a, #-8
+			add	a, _rx_data
+			mov	_DPL1, a
+			clr	a
+			addc	a, _rx_data+1
+			mov	_DPH1, a
+0035$:				inc	_DPS
+				movx	a, @dptr
+				inc	dptr
+				mov	r0, a	
+				dec	_DPS
+				movx	a, @dptr
+				xrl	a, r0
+				jnz	0703$
+				inc	dptr
+				djnz	r1, 0035$
+			setb	_rx_crypto		//		rx_crypto = 1;
+			//		done above	//		rx_packet = (packet __xdata *)&rx_data[hdr+6];
+			mov	_rx_len, r3		//		rx_len = c;
+			jnb	_suota_enabled, 0701$	//		if (suota_enabled) {
+				lcall	_incoming_suota_version//	 if (incoming_suota_version(rx_packet))
+				mov	a, dpl		//			return;
+				jnz	0703$
+				mov	dpl, _rx_packet	//		if  (rx_packet->type == P_TYPE_SUOTA_REQ || rx_packet->type == P_TYPE_SUOTA_RESP) {
+				mov	dph, _rx_packet+1//			incoming_suota_packet(rx_packet, rx_len);
+				movx	a, @dptr	//				return;
+				cjne	a, #P_TYPE_SUOTA_REQ, 0036$//		x	}
+					sjmp	0037$	//		}
+0036$:				cjne	a, #P_TYPE_SUOTA_RESP, 0701$
+0037$:					lcall	_incoming_suota_packet
+					mov	a, dpl
+					jnz	0703$
+			sjmp	0701$			//	} else {
+
+0012$:			clr	_rx_crypto		//		rx_crypto = 0;
+			mov	a, _rx_len		//		rx_len -= hdr
+			clr	c
+		     	subb	a, r2
+			mov	_rx_len, a
+			mov	a, _rx_data		//		rx_packet = (packet __xdata *)&rx_data[hdr];
+			add	a, r2;
+			mov	_rx_packet, a
+			clr	a
+			add	a, _rx_data+1
+			mov	_rx_packet+1, a
+							//	}
+0701$:
+		mov	dpl, #APP_RCV_PACKET		//	app(APP_RCV_PACKET);
+		mov	a,#0703$
+		push	acc
+		mov	a,#(0703$ >> 8)
+		push	acc
+		push	_x_app
+		push	_x_app+1
+		ret
+0703$:							//done:
+		jnb	_rx_rset, 0704$			//	if (rx_rset) {
+			clr	_rx_busy1		//		rx_busy1 = 0;
+			clr	_rx_rset		//		rx_rset = 0;
+			sjmp	0705$			//	} else {
+0704$:			clr	_rx_busy0		//		rx_busy0 = 0;
+			setb	_rx_rset		//		rx_rset = 1;
+							//	}
+0705$:	ljmp	0001$					// }
+	__endasm;
 }
 
 __xdata task rcv_task = {rcv_handler, 0, 0, 0};
@@ -862,32 +1483,12 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 			inc	dptr
 			djnz	r2, 0031$
 
-		mov	a, _ENCCS	//	ENCCS &= ~0x70;
-		anl	a, #~0x70
-		mov	_ENCCS, a
-		orl	a, #AES_MODE_CBCMAC	//ENCCS |= AES_MODE_CBCMAC;
-		mov	_ENCCS, a
-
-
-		push	ar5		// len
 		push	ar1		// i
 		mov	dptr, #_tmp		//	aes_op(tmp, AES_ENCRYPT, i, cipher, iv);
-		mov	r0, #_aes_op_PARM_2
-		mov	a, #AES_ENCRYPT
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_3
-		mov	a, r1
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_4
-		mov	a, #_cipher
-		movx	@r0, a
-		inc	r0
-		mov	a, #_cipher>>8
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_5
-		mov	a, #_iv
-		movx	@r0, a
-		lcall	_aes_op
+		mov	r7, ar1
+		mov	_DPL1, #_cipher
+		mov	_DPH1, #_cipher>>8
+		lcall	_aes_op_cbc_mac
 		
 		mov	r0, #_iv		//	iv[0] = 1;
 		mov	a, #1
@@ -915,28 +1516,14 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 			inc	_DPS// #1
 			djnz	r1, 0032$
 
-		mov	a, _ENCCS	//	ENCCS &= ~0x70;
-		anl	a, #~0x70
-		mov	_ENCCS, a
-		orl	a, #AES_MODE_CTR	//	ENCCS |= AES_MODE_CTR;
-		mov	_ENCCS, a
-
 		dec	_DPS// #0
 		mov     dptr, #_tmp	//	aes_op(tmp, AES_ENCRYPT, 16, cipher, iv);
 					// aes_op_PARM_2 already set
-		mov	r0, #_aes_op_PARM_3
-		mov	a, #16
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_4
-		mov	a, #_cipher
-		movx	@r0, a
-		inc	r0
-		mov	a, #_cipher>>8
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_5
-		mov	a, #_iv
-		movx	@r0, a
-		lcall	_aes_op
+		mov	r7, #16
+		mov	_DPL1, #_cipher
+		mov	_DPH1, #_cipher>>8
+		mov	r1, #AES_ENCRYPT|AES_MODE_CTR
+		lcall	_aes_op_ctr
 
 		pop	ar1	// i
 
@@ -946,14 +1533,6 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		mov	a, #1
 		movx	@r0, a
 
-		mov	a, _ENCCS	//	ENCCS &= ~0x70;
-		anl	a, #~0x70
-		mov	_ENCCS, a
-		orl	a, #AES_MODE_CTR	//	ENCCS |= AES_MODE_CTR;
-		mov	_ENCCS, a
-
-		pop	ar5	// len
-		push	ar5
 		clr	c
 		mov	a, r1
 		subb	a, r5	// i-len
@@ -972,32 +1551,23 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		clr 	a
 		addc	a, #_tmp>>8
 		mov	dph, a			// aes_op_PARM_2 already set
-		mov	r0, #_aes_op_PARM_3
-		mov	a, r5
-		movx	@r0, a			
-		mov	r0, #_aes_op_PARM_4
-		mov	a, #_cipher+16
-		movx	@r0, a
-		inc	r0
-		mov	a, #(_cipher+16)>>8
-		movx	@r0, a
-		mov	r0, #_aes_op_PARM_5
-		mov	a, #_iv
-		movx    @r0, a
-		lcall	_aes_op
+		mov	r7, ar5
+		mov	_DPL1, #_cipher+16
+		mov	_DPH1, #(_cipher+16)>>8
+		mov	r1, #AES_ENCRYPT|AES_MODE_CTR
+		lcall	_aes_op_ctr
 
 		mov	r0, #_nonce_tx+9//	nonce_tx[9-12]++
 		mov 	r1, #4
 0834$:
 			movx	a, @r0
 			inc	a
-			mov	@r0, a
+			movx	@r0, a
 			jnz	0835$
 			inc	r0
 			djnz	r1, 0834$
 		
 0835$:
-		pop	ar5	// len
 		mov	dptr, #_cipher+16		//	p = &cipher[16];
 0034$:			movx	a, @dptr	//	while (len--)
 			mov	_RFD, a		//		RFD = *p++;

@@ -130,7 +130,7 @@ crc_fail:ret	// by def dpl is non 0 here
 }
 
 void
-suota_setup(void)
+suota_setup()
 {
 	current_code = (code_hdr __code*)BASE0;
 	next_code = (code_hdr __code*)BASE1;
@@ -165,19 +165,19 @@ suota_setup(void)
 }
 
 void
-incoming_suota_packet(packet __xdata* pkt, u8 len)
+incoming_suota_packet()
 {
-	if (pkt->arch!=THIS_ARCH) 
+	if (rx_packet->arch!=THIS_ARCH) 
 		return;
-	if (pkt->type == P_TYPE_SUOTA_REQ) {
+	if (rx_packet->type == P_TYPE_SUOTA_REQ) {
 		unsigned int offset;
-		rq = (suota_req __xdata*)&pkt->data[0];
-		rp = (suota_resp __xdata*)&pkt->data[0];
+		rq = (suota_req __xdata*)&rx_packet->data[0];
+		rp = (suota_resp __xdata*)&rx_packet->data[0];
 `
 		if (memcpy(&rq->version[0], &current_code->version[0], 3)!=0 ||
 		    memcmp(&rq->id[0], &rf_id[0], 2) != 0) 
 			return;
-		pkt->type = P_TYPE_SUOTA_RESP;
+		rx_packet->type = P_TYPE_SUOTA_RESP;
 		offset = *(unsigned int __xdata *)&rq->offset[0];
 		{
 			unsigned int l;
@@ -185,18 +185,18 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 			if (l > offset) 
 				memcpy(&rp->data[0], &((u8*)current_code)[offset], sizeof(rp->data));
 		}
-		rf_send(pkt, sizeof(packet)-1+sizeof(suota_resp), SUOTA_KEY, 0);
+		rf_send(rx_packet, sizeof(packet)-1+sizeof(suota_resp), SUOTA_KEY, 0);
 	} else
-	if (pkt->type == P_TYPE_SUOTA_RESP) {
+	if (rx_packet->type == P_TYPE_SUOTA_RESP) {
 		unsigned int len;
 		unsigned int offset;
-		rq = (suota_req __xdata *)&pkt->data[0];
-		rp = (suota_resp __xdata *)&pkt->data[0];
+		rq = (suota_req __xdata *)&rx_packet->data[0];
+		rp = (suota_resp __xdata *)&rx_packet->data[0];
 		offset = *(unsigned int __xdata *)&rq->offset[0];
 		if (!suota_state || memcpy(&rp->version[0], &suota_version[0], 3) != 0 || offset != suota_offset) 
 			return;
 		cancel_task(&suota_task);
-		pkt->type = P_TYPE_SUOTA_REQ; 
+		rx_packet->type = P_TYPE_SUOTA_REQ; 
 		len = (*(unsigned int __xdata *)&rp->total_len[0])-offset;
 		if (len > 0) {
 			unsigned int addr = (unsigned int)next_code;
@@ -207,7 +207,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 				len = sizeof(rp->data);
 			
 			if (offset == 0) {	// skip over CRC/version we'll do it later - helps us recover from evil
-				memcpy(&suota_crc, &pkt->data[0], 4); 
+				memcpy(&suota_crc, &rx_packet->data[0], 4); 
 				i = 8;
 				EA = 0; 
 				while (FCTL & 0x80); //  FCTL.BUSY 
@@ -215,7 +215,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 				FCTL |= 0x01; 	     // set FCTL.ERASE 
 				while (FCTL & 0x80); //  FCTL.BUSY 
 				addr += 8;
-				pp = &pkt->data[8];
+				pp = &rx_packet->data[8];
 			} else {
 				i = 0;
 				addr += offset;
@@ -227,7 +227,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 					while (FCTL & 0x80); //  FCTL.BUSY 
 					EA = 1; 
 				}
-				pp = &pkt->data[0];
+				pp = &rx_packet->data[0];
 			}
 			EA = 0; 
 			FADDRH = addr>>10;
@@ -258,7 +258,7 @@ incoming_suota_packet(packet __xdata* pkt, u8 len)
 				// restart!
 			}
 		}
-		rf_send(pkt, sizeof(packet)-1+sizeof(suota_req), SUOTA_KEY, 0);
+		rf_send(rx_packet, sizeof(packet)-1+sizeof(suota_req), SUOTA_KEY, 0);
 		queue_task(&suota_task, 255);
 	} 
 	
@@ -277,23 +277,23 @@ static void suota_request()
 }
 
 u8
-incoming_suota_version(packet __xdata*pkt) 
+incoming_suota_version(void) 
 {
-	if (pkt->arch != THIS_ARCH) 
+	if (rx_packet->arch != THIS_ARCH) 
 		return 0;
-	if (pkt->version[0] < current_code->version[0] ||
-	    (pkt->version[0] == current_code->version[0] &&
-	     (pkt->version[1] < current_code->version[1] ||
-	      (pkt->version[1] == current_code->version[1] &&
-	       (pkt->version[2] <= current_code->version[2])))))
+	if (rx_packet->version[0] < current_code->version[0] ||
+	    (rx_packet->version[0] == current_code->version[0] &&
+	     (rx_packet->version[1] < current_code->version[1] ||
+	      (rx_packet->version[1] == current_code->version[1] &&
+	       (rx_packet->version[2] <= current_code->version[2])))))
 		return 0;
-	if (pkt->version[0] < suota_version[0] ||
-	    (pkt->version[0] == suota_version[0] &&
-	     (pkt->version[1] < suota_version[1] ||
-	      (pkt->version[1] == suota_version[1] &&
-	       (pkt->version[2] <= suota_version[2])))))
+	if (rx_packet->version[0] < suota_version[0] ||
+	    (rx_packet->version[0] == suota_version[0] &&
+	     (rx_packet->version[1] < suota_version[1] ||
+	      (rx_packet->version[1] == suota_version[1] &&
+	       (rx_packet->version[2] <= suota_version[2])))))
 		return 0;
-	memcpy(&suota_version[0], &pkt->version[0], 3);
+	memcpy(&suota_version[0], &rx_packet->version[0], 3);
 	suota_offset = 0;
 	if (current_code->version[2]&1) {
 		suota_state = SUOTA_STATE_UPDATING_1;

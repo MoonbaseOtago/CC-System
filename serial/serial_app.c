@@ -56,6 +56,19 @@ static __xdata task uart_rcv_task = {uart_rcv_thread,0,0,0};
 void ser_puthex(u8 v);
 void ser_putstr(char __code *cp);
 void ser_putc(char c);
+extern void ps(const char __code *);
+extern void pf(const char __code *);
+extern void pd(unsigned char __xdata *, u8);
+extern void pdd(unsigned char __pdata *, u8);
+extern void ph(u8);
+
+static void reset() __naked
+{
+	__asm;
+	mov	_IEN0, #0
+	ljmp	0
+	__endasm;
+}
 
 static void tx_intr() __naked 
 {
@@ -289,6 +302,9 @@ static void uart_rcv_thread(task __xdata*t)
 			case PKT_CMD_SET_PROMISCUOUS:
 				rf_set_promiscuous(r[0]);
 				break;
+			case PKT_CMD_RESET:
+				reset();
+				break;
 			case PKT_CMD_SET_RAW:
 				rf_set_raw(r[0]);
 				break;
@@ -519,6 +535,7 @@ static unsigned int my_app(unsigned char op)
 		rf_set_key(&keys[rtx_key][0]);
 		break;
 	case APP_RCV_PACKET:
+		send_printf("Data\n");
 		send_rcv_packet();
 		break;
 	}

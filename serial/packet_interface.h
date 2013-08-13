@@ -41,6 +41,7 @@
 #define PKT_CMD_RCV_PACKET_BROADCAST		0x0c
 #define	PKT_CMD_SET_PROMISCUOUS			0x0d
 #define	PKT_CMD_SET_RAW				0x0e
+#define	PKT_CMD_RESET				0x0f
 #define PKT_CMD_SEND_PACKET_CRYPT		0x20	// 0x20->0x27 depending on key
 #define PKT_CMD_SEND_PACKET_CRYPT_MAC		0x40	// 0x20->0x27 depending on key
 #define PKT_CMD_RCV_PACKET_CRYPT		0x60	// only 1 key for now
@@ -102,13 +103,14 @@ extern void rf_close(rf_handle handle);
 extern int rf_command(rf_handle handle, const char *cmd);
 extern int rf_initialise(rf_handle handle, const char *file);
 inline int rf_initialize(rf_handle handle, const char *file) { return rf_initialize(handle, file); }
-extern void rf_on(rf_handle handle, int key);
+extern void rf_on(rf_handle handle);
 extern void rf_off(rf_handle handle);
 extern void rf_set_auto_dump(rf_handle handle, FILE *output);
 extern void rf_set_channel(rf_handle handle, int channel);
 extern void rf_set_key(rf_handle handle, int k, const unsigned char *key);
 extern void rf_set_mac(rf_handle handle, const unsigned char *mac);
 extern void rf_set_promiscuous(rf_handle handle, int on);
+extern void rf_reset(rf_handle handle);
 extern void rf_set_raw(rf_handle handle, int on);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
@@ -121,7 +123,7 @@ class rf_interface {
 public:
 	rf_interface(const char *serial_device, rf_rcv rcv_callback);
 	~rf_interface();
-	void on(int key);
+	void on();
 	void off();
 	void ping();
 	void set_auto_dump(FILE *output);
@@ -129,6 +131,7 @@ public:
 	void set_key(int k, const unsigned char *key);
 	void set_mac(const unsigned char *mac);
 	void set_promiscuous(int on);
+	void reset(void);
 	void set_raw(int on);
 	void send(const unsigned char *mac, const unsigned char *data, int len);
 	void send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len);

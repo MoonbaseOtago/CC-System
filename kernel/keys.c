@@ -121,7 +121,7 @@ keys_thread(task __xdata*ts) __naked
   		anl	_P0SEL, #~0x8
 		anl	_P0DIR, #~0x04;	// trisate sample pin
 		clr	_P0_4 
-		ajmp	$0009
+		ljmp	$0009
 $0001:
 //	case 0x04:
 	jnb	_ACC_2, $0002
@@ -156,7 +156,7 @@ $0011:
 				clr	_key0_pressed
 $0014:
 				mov	a, #KEY_O
-				acall	_call_key_app
+				lcall	_call_key_app
 $0012:		
 		//putstr("key ");puthex(key_state);putstr(" ");puthex(T1CC0H);puthex(T1CC0L);putstr("\n");
 //		P0_4 =  1;
@@ -173,7 +173,7 @@ $0012:
 		orl	_PERCFG, #3
 		anl	_P0DIR, #~0x10	// trisate sample pin
 		clr	_P0_2
-		ajmp	$0009
+		ljmp	$0009
 
 $0002:
 //	case 0x10:
@@ -208,7 +208,7 @@ $0021:
 				clr	_key1_pressed
 $0024:
 				mov	a, #KEY_X
-				acall	_call_key_app
+				lcall	_call_key_app
 $0022:		
 		//putstr("key ");puthex(key_state);putstr(" ");puthex(T1CC2H);puthex(T1CC2L);putstr("\n");
 //		P0_2 =  1;
@@ -264,7 +264,7 @@ $0031:
 				clr	_key2_pressed
 $0034:
 				mov	a, #KEY_LEFT
-				acall	_call_key_app
+				lcall	_call_key_app
 $0032:		
 //		//putstr("key ");puthex(key_state);putstr(" ");puthex(T1CC3H);puthex(T1CC3L);putstr("\n");
 //		P0_6 =  1;
@@ -317,7 +317,7 @@ $0041:
 				clr	_key3_pressed
 $0044:
 				mov	a, #KEY_RIGHT
-				acall	_call_key_app
+				lcall	_call_key_app
 $0042:		
 		//putstr("key ");puthex(key_state);putstr(" ");puthex(T1CC4H);puthex(T1CC4L);putstr("\n");
 //		P0_5 =  1;

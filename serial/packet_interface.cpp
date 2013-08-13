@@ -53,10 +53,10 @@ rf_close(rf_handle handle)
 }
 
 void
-rf_on(rf_handle handle, int key)
+rf_on(rf_handle handle)
 {
 	rf_interface *i = (rf_interface*)handle;
-	i->on(key);
+	i->on();
 }
 
 void
@@ -113,6 +113,13 @@ rf_set_promiscuous(rf_handle handle, int on)
 {
 	rf_interface *i = (rf_interface*)handle;
 	i->set_promiscuous(on);
+}
+
+void
+rf_reset(rf_handle handle)
+{
+	rf_interface *i = (rf_interface*)handle;
+	i->reset();
 }
 
 void
@@ -193,10 +200,9 @@ rf_interface::~rf_interface()
 }
 
 void
-rf_interface::on(int key)
+rf_interface::on()
 {
-	unsigned char k = key;
-	send_packet(PKT_CMD_RCV_ON, 1, &k);
+	send_packet(PKT_CMD_RCV_ON, 0, 0);
 }
 
 void
@@ -252,6 +258,12 @@ rf_interface::set_raw(int on)
 {
 	unsigned char c = (on?1:0);
 	send_packet(PKT_CMD_SET_RAW, 1, &c);
+}
+
+void
+rf_interface::reset(void)
+{
+	send_packet(PKT_CMD_RESET, 0, 0);
 }
 
 void
@@ -333,7 +345,7 @@ rf_interface::rf_thread()
 	int sum2, sum, len, off;
 	unsigned char cmd;
 	unsigned char b[256];
-	unsigned char data[4+8+128];
+	unsigned char data[4+8+128+256];
 
 	pthread_mutex_lock(&mutex);
 	for (;;) {
@@ -575,13 +587,16 @@ rf_interface::command(const char *cc, const char *file, int line)
 		off();
 		break;
 	case 'O':
-		on(0);
+		on();
 		break;
 	case 'p':
 		ping();
 		break;
 	case 'P':
 		set_promiscuous(*cp == '-'?0:1);
+		break;
+	case 'R':
+		reset();
 		break;
 	case 'r':
 		set_raw(*cp == '-'?0:1);
@@ -601,15 +616,6 @@ rf_interface::command(const char *cc, const char *file, int line)
 			res = 0;
 		} else {
 			set_channel(i);
-		}
-		break;
-	case 'k':
-		k = strtol(cp, 0, 0);
-		if (k < 0 || k >= 8) {
-			fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
-			res = 0;
-		} else {
-			on(i);
 		}
 		break;
 	case 'K':

@@ -23,6 +23,7 @@
 #include <cc2530.h>
 #include "task.h"
 #include "protocol.h"
+#include "suota.h"
 
 extern unsigned int (* __data x_app) (u8 v);
 #define app (*x_app)

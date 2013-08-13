@@ -35,8 +35,8 @@ typedef struct suota_resp {
 } suota_resp;
 
 #ifndef __cplusplus
-void incoming_suota_packet(packet __xdata* p, u8 len);
-u8 incoming_suota_version(packet __xdata *p);
+void incoming_suota_packet();
+u8 incoming_suota_version();
 void suota_setup();
 extern code_hdr  __code * __xdata current_code;
 extern __bit suota_enabled;

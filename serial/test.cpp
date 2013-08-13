@@ -21,10 +21,9 @@ help()
 	printf("h: help\n");
 	printf("i: initialise file\n");
 	printf("m: set mac                          - m a:b:c:d:e:f:g\n");
-	printf("k: on, set key                      - k key-num\n");
 	printf("K: load key (16 hex bytes)          - K key-num value \n");
-	printf("O: on, key 0\n");
-	printf("o: off\n");
+	printf("O: receiver on\n");
+	printf("o: receiver off\n");
 	printf("p: ping\n");
 	printf("P: set promiscuous (snoops any packet)\n");
 	printf("r: set raw - dumps all received pckets\n");
