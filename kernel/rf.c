@@ -35,15 +35,12 @@ static u8 __data rx_len1;
 u8 __data rx_len;
 packet __xdata  * __data rx_packet;
 u8 __xdata * __data rx_mac;
-__bit rx_crypto;
-__bit rx_broadcast;
 static __bit rx_raw=0;
 __xdata static u8 tmp[128];
 __xdata static u8 cipher[128];
 __pdata static u8 nonce_tx[16];
 __pdata static u8 nonce_rx[16];
 __pdata static u8 iv[16];
-__pdata u8 rf_id[2];
 __xdata unsigned char tmp_packet[32];
 u8 __data rtx_key;
 static u8 __pdata seq;
@@ -234,8 +231,8 @@ rf_set_mac(u8 __xdata *m)
 	u8 i;
 	for (i = 0; i < 6; i++)
 		IEEE_MAC[i] = m[i];
-	nonce_tx[7] = IEEE_MAC[6] = rf_id[0] = m[6];
-	nonce_tx[8] = IEEE_MAC[7] = rf_id[1] = m[7];
+	nonce_tx[7] = IEEE_MAC[6] = m[6];
+	nonce_tx[8] = IEEE_MAC[7] = m[7];
 }
 
 void
@@ -281,11 +278,9 @@ rf_init(void)
     nonce_rx[13] = 6;
     nonce_tx[0] = 9;
     nonce_tx[13] = 6;
-    nonce_tx[7] = rf_id[0] = IEEE_MAC[6];
-    nonce_tx[8] = rf_id[1] = IEEE_MAC[7];
+    nonce_tx[7] = IEEE_MAC[6];
+    nonce_tx[8] = IEEE_MAC[7];
 
-    // generate rf_id  XXX
-    
     rtx_key = 0xff;
 
     rf_set_channel(11);	// for a start
@@ -1202,16 +1197,9 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r5, a		// len
 	jnb	_suota_enabled, 0700$	//	if (suota_enabled) {
 		inc	dptr
-		mov	r0, #_rf_id	//		memcpy(&pkt->id[0], &rf_id[0], 2);
-		mov	r2, #2
-0018$:			movx	a, @r0
-			inc	r0
-			movx	@dptr, a
-			inc dptr
-			djnz	r2, 0018$
 		mov	r0, #_current_code//    	pkt->arch = current_code->arch;
-		movx	a, @r0		//		memcpy(&pkt->version[0], &current_code->version[0], 3);
-		add	a, #4
+		movx	a, @r0		//		pkt->code_base = current_code->code_base
+		add	a, #4		//              memcpy(&pkt->version[0], &current_code->version[2], 3);
 		mov	_DPL1, a
 		inc 	r0
 		movx	a, @r0

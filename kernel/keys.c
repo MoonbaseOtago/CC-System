@@ -28,7 +28,6 @@ static void keys_thread(task __xdata*t);
 static __xdata task key_task = {keys_thread,0,0,0};
 static __data u8 key_state;
 u8 __pdata key;  
-__bit key_down;
 static __bit key0_pressed, key1_pressed, key2_pressed, key3_pressed;
 
 void

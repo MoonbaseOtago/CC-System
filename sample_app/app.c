@@ -20,19 +20,6 @@
 #include <cc2530.h>
 #include "interface.h"
 
-static xxxx() __naked {
-	__asm;
-	.area CSEG    (CODE)
-	.globl	_CODE_HEADER
-_CODE_HEADER:
-	.db	0, 0, 0, 0	// CRC will go here
-	.db	THIS_ARCH
-	.db	0, 0, 0		// version (little endian)
-	.db	0, 0		// len from arch to end of code 
-	ljmp	_my_app
-	__endasm;
-}
-
 __xdata unsigned char mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
 __xdata unsigned char ckey[] = {0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,	// 16 byte crypto key - will change
 			       0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf};
@@ -45,7 +32,7 @@ __xdata u8 leds[6];
 #define MAX_UNIQ	4
 __pdata u8 uniq_filter[MAX_UNIQ*2];
 __pdata u8 uniq_index;
-static unsigned int my_app(unsigned char op) 
+unsigned int my_app(unsigned char op) 
 {
 	switch (op) {
 	case APP_INIT:

@@ -16,31 +16,28 @@
 // License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-#ifndef __suota_h_
-#define __suota_h_
+#include "protocol.h"
 
-typedef struct suota_req {
-	unsigned char arch;
-	unsigned char code_base;
-	unsigned char version[2];
-	unsigned char offset[2];
-} suota_req;
+static void xxxx() __naked {
+	__asm;
+	.area CSEG    (CODE)
+	.globl	_CODE_HEADER
+_CODE_HEADER:
+	.db	0, 0, 0, 0	// CRC will go here
+	.db	0, 0		// len from arch to end of code 
+	.db	THIS_ARCH
+	.db	THIS_CODE_BASE
+	.db	0, 0		// version (little endian)
+	mov	dpl, #0
+	ret
+	.area DSEG    (DATA)
+	.globl	_data_end
+_data_end:
+	.ds	1
+	.area XSEG    (XDATA)
+	.globl	_xseg_end
+_xseg_end:
+	.ds	1
 
-typedef struct suota_resp {
-	unsigned char arch;
-	unsigned char code_base;
-	unsigned char version[2];
-	unsigned char offset[2];
-	unsigned char total_len[2];
-	unsigned char data[64];
-} suota_resp;
-
-#ifndef __cplusplus
-void incoming_suota_packet();
-u8 incoming_suota_version();
-void suota_setup();
-extern code_hdr  __code * __xdata current_code;
-extern __bit suota_enabled;
-#endif
-
-#endif
+	__endasm;
+}

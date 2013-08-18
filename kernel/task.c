@@ -36,6 +36,11 @@ static unsigned int __data last;
 static unsigned char __data tmp0;
 static unsigned char __data tmp1;
 
+#ifndef SYSTEM_ATTRIBUTES
+#define SYSTEM_ATTRIBUTES 0
+#endif
+unsigned char __code system_attributes=SYSTEM_ATTRIBUTES; 
+
 static void
 iretx() __naked
 {	

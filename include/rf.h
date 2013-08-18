@@ -36,8 +36,6 @@ __sfr __at 0x9a IEN2;
 __sfr __at 0x9b S1CON;
 
 
-extern __pdata u8 rf_id[2];
-
 volatile __xdata __at  0x6180 unsigned char  FRMFILT0;
 volatile __xdata __at  0x6181 unsigned char  FRMFILT1;
 volatile __xdata __at  0x6182 unsigned char  SRCMATCH;

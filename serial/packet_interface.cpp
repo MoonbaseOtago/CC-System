@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <zlib.h>
 #include <poll.h>
+#include <sys/time.h>
 
 
 //
@@ -144,17 +145,17 @@ rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsign
 }
 
 void
-rf_set_suota_version(rf_handle handle, unsigned char arch, unsigned long version)
+rf_send_repeat(rf_handle handle, int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version)
 {
 	rf_interface *i = (rf_interface*)handle;
-	i->set_suota_version(arch, version);
+	i->send_repeat(secs, key, arch, code_base, version);
 }
 
 int
-rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned long version, const char *file)
+rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
 {
 	rf_interface *i = (rf_interface*)handle;
-	return i->set_suota_upload(key, arch, version, file);
+	return i->set_suota_upload(key, arch, code_base, version, file);
 }
 
 rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
@@ -172,6 +173,7 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 	callback = rcv_callback;
 	shutdown = 0;
 	auto_dump = 0;
+	repeat_list = 0;
 	pthread_mutex_init(&mutex, 0);
 	pthread_cond_init(&cond, 0);
 	pthread_create(&tid, 0, thread, this);
@@ -180,16 +182,26 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 rf_interface::~rf_interface()
 {
 	suota_upload *sp;
+	pthread_mutex_lock(&mutex);
 	if (fd >= 0) {
-		pthread_mutex_lock(&mutex);
 		shutdown = 1;
 		::close(fd);
 		fd = -1;
 		pthread_cond_broadcast(&cond);
 		while (shutdown)
 			pthread_cond_wait(&cond, &mutex);
-		pthread_mutex_unlock(&mutex);
 	}
+	while (repeat_list) {
+		suota_repeat *rp = repeat_list;
+		rp->quit = 1;
+		pthread_cond_broadcast(&rp->cond);
+		while (rp->quit)
+			pthread_cond_wait(&rp->cond, &mutex);
+		repeat_list = rp->next;
+		pthread_cond_destroy(&rp->cond);
+		free(rp); 
+	}
+	pthread_mutex_unlock(&mutex);
 
 	while (suota_list) {
 		sp = suota_list;
@@ -226,15 +238,84 @@ rf_interface::set_channel(int channel)
 	send_packet(PKT_CMD_SET_CHANNEL, 1, &c);
 }
 
-void
-rf_interface::set_suota_version(unsigned char arch, unsigned long version)
+void *
+rf_interface::repeater(void *p)
 {
-	unsigned char x[4];
-	x[0] = arch;
-	x[1] = version;
-	x[2] = version>>8;
-	x[3] = version>>16;
-	send_packet(PKT_CMD_SET_SUOTA_VERSION, 4, &x[0]);
+	suota_repeat *rp = (suota_repeat *)p;
+	pthread_detach(pthread_self());
+
+	pthread_mutex_lock(&rp->parent->mutex);
+	for (;;) {
+		struct timespec timeout;
+		struct timeval now;
+		packet pkt;
+
+		if (rp->quit) {
+			rp->quit = 0;
+			pthread_cond_broadcast(&rp->cond);
+			pthread_mutex_unlock(&rp->parent->mutex);
+			return 0;
+		}
+		pkt.type = P_TYPE_NOP;
+		pkt.arch = rp->arch;
+		pkt.code_base = rp->code_base;
+		pkt.version[0] = rp->version;
+		pkt.version[1] = rp->version>>8;
+		rp->parent->send_crypto(rp->key, 0, (unsigned char *)&pkt, sizeof(pkt));
+		gettimeofday(&now, 0);
+		timeout.tv_sec = now.tv_sec + rp->secs;
+              	timeout.tv_nsec = now.tv_usec * 1000;
+		while (!rp->quit &&  pthread_cond_timedwait(&rp->cond, &rp->parent->mutex, &timeout) != ETIMEDOUT)
+			;
+	}
+}
+
+void
+rf_interface::send_repeat(int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version)
+{
+	suota_repeat *rp;
+	pthread_t t;
+
+	if (secs <= 0) {
+		suota_repeat *last = 0;
+
+		pthread_mutex_lock(&mutex);
+		for (rp = repeat_list; rp; rp=rp->next) {
+			if (rp->key == key && rp->arch == arch && rp->code_base == code_base && rp->version == version) {
+				rp->quit = 1;
+				pthread_cond_broadcast(&rp->cond);
+				while (rp->quit)
+					pthread_cond_wait(&rp->cond, &mutex);
+				if (last) {
+					last->next = rp->next;
+				} else {
+					repeat_list = rp->next;
+				}
+				pthread_cond_destroy(&rp->cond);
+				free(rp);
+				break;
+			}
+			last = rp;
+		}
+		pthread_mutex_unlock(&mutex);
+		return;
+	}
+	rp = (suota_repeat *)malloc(sizeof(*rp));
+	if (!rp)
+		return;
+	pthread_mutex_lock(&mutex);
+	rp->parent = this;
+	rp->secs = secs;
+	rp->next = repeat_list;
+	repeat_list = rp;
+	rp->key = key;
+	rp->arch = arch;
+	rp->code_base = code_base;
+	rp->version = version;
+	rp->quit = 0;
+	pthread_cond_init(&rp->cond, 0);
+	pthread_create(&t, 0, repeater, rp);
+	pthread_mutex_unlock(&mutex);
 }
 
 void
@@ -276,8 +357,6 @@ rf_interface::set_promiscuous(int on)
 void
 rf_interface::set_mac(const unsigned char *mac)
 {
-	rf_id[0] = mac[6];
-	rf_id[1] = mac[7];
 	send_packet(PKT_CMD_SET_MAC, 8, mac);
 }
 
@@ -436,22 +515,20 @@ rf_interface::rf_thread()
 					if (suota_list && ((packet *)&data[8])->type == P_TYPE_SUOTA_REQ) {
 						packet *p = (packet *)&data[8];
 						suota_req *srp = (suota_req*)&p->data[0];
-						if (srp->id[0] != rf_id[0] || srp->id[1] != rf_id[1])
-							goto log;
 						for (suota_upload *sp = suota_list; sp; sp=sp->next) 
 						if (srp->arch == sp->arch &&
+						    srp->code_base == sp->code_base &&
 						    srp->version[0] == (sp->version&0xff) &&
-						    srp->version[1] == ((sp->version>>8)&0xff) &&
-						    srp->version[2] == ((sp->version>>16)&0xff)) {	
+						    srp->version[1] == ((sp->version>>8)&0xff)) {
 							unsigned char b[100];
 							packet *pp = (packet *)&b[0];
 							suota_resp *rp = (suota_resp *)&pp->data[0];
 							unsigned int offset = srp->offset[0]|(srp->offset[1]<<8);
 							pp->type = P_TYPE_SUOTA_RESP;
 							rp->arch = sp->arch;
+							rp->code_base = sp->code_base;
 							rp->version[0] = sp->version;
 							rp->version[1] = sp->version>>8;
-							rp->version[2] = sp->version>>16;
 							rp->offset[0] = offset;
 							rp->offset[1] = offset>>8;
 							rp->total_len[0] = sp->len;
@@ -568,7 +645,7 @@ int
 rf_interface::command(const char *cc, const char *file, int line)
 {
 	char *cp = (char *)cc;	// cast to make strol happy
-	int arch, version, k;
+	int secs, arch, code_base, version, k;
 	unsigned char key[16];
 	char tmp[100];
 	char c = *cp++;
@@ -836,7 +913,21 @@ rf_interface::command(const char *cc, const char *file, int line)
 			send(macp, data, len);
 		}
 		break;
-	case 'S':
+	case 'U':
+		secs = strtol(cp, &cp, 0);
+		if (secs < 0) {
+                        fprintf(stderr, "%s: invalid seconds number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), secs);
+                        res = 0;
+			break;
+		}
+		while (*cp == ' ' || *cp == '\n')
+		k = strtol(cp, &cp, 0);
+		if (k < 0 || k >= 8) {
+                        fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
+                        res = 0;
+			break;
+		}
+		while (*cp == ' ' || *cp == '\n')
 		arch = strtol(cp, &cp, 0);
 		if (arch < 0 || arch >= 256) {
                         fprintf(stderr, "%s: invalid architecture number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
@@ -844,14 +935,21 @@ rf_interface::command(const char *cc, const char *file, int line)
 			break;
 		}
 		while (*cp == ' ' || *cp == '\n')
-			cp++;
-		version = strtol(cp, &cp, 0);
-		if (version < 0 || version >= (1<<24)) {
-                        fprintf(stderr, "%s: invalid architecture version %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
+		code_base = strtol(cp, &cp, 0);
+		if (code_base < 0 || code_base >= 256) {
+                        fprintf(stderr, "%s: invalid code_base number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), code_base);
                         res = 0;
 			break;
 		}
-		set_suota_version(arch, version);
+		while (*cp == ' ' || *cp == '\n')
+			cp++;
+		version = strtol(cp, &cp, 0);
+		if (version < 0 || version >= (1<<16)) {
+                        fprintf(stderr, "%s: invalid architecture version %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), version);
+                        res = 0;
+			break;
+		}
+		send_repeat(secs, k, arch, code_base, version);
 		break;
 	case 'u':
 		arch = strtol(cp, &cp, 0);
@@ -862,17 +960,25 @@ rf_interface::command(const char *cc, const char *file, int line)
 		}
 		while (*cp == ' ' || *cp == '\n')
 			cp++;
+		code_base = strtol(cp, &cp, 0);
+		if (code_base < 0 || code_base >= 256) {
+                        fprintf(stderr, "%s: invalid code_base number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), code_base);
+                        res = 0;
+			break;
+		}
+		while (*cp == ' ' || *cp == '\n')
+			cp++;
 		k = strtol(cp, &cp, 0);
 		if (k < 0 || k >= 8) {
-                        fprintf(stderr, "%s: invalid k number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
+                        fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
                         res = 0;
 			break;
 		}
 		while (*cp == ' ' || *cp == '\n')
 			cp++;
 		version = strtol(cp, &cp, 0);
-		if (version < 0 || version >= (1<<24)) {
-                        fprintf(stderr, "%s: invalid architecture version %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
+		if (version < 0 || version >= (1<<16)) {
+                        fprintf(stderr, "%s: invalid architecture version %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), version);
                         res = 0;
 			break;
 		}
@@ -888,7 +994,7 @@ rf_interface::command(const char *cc, const char *file, int line)
                         res = 0;
 			break;
 		}
-		if (!set_suota_upload(k, arch, version, cp)) {
+		if (!set_suota_upload(k, arch, code_base, version, cp)) {
                         fprintf(stderr, "%s: loading file '%s' failed\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp);
                         res = 0;
 		}
@@ -935,150 +1041,57 @@ hex(FILE *f)
 }
 
 int
-rf_interface::set_suota_upload(int key, unsigned char arch, unsigned long version, const char *file)
+rf_interface::set_suota_upload(int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
 {
 	FILE *f = fopen(file, "r");
+	unsigned char hdr[4];
 	if (!f)
 		return 0;
-	int total = 0;
-	bool first = 1;
-	for(;;) {
-	    	int c;
-            	int i;
-            	int len, addr;
-		c = fgetc(f);
-		if (c < 0)
-			break;
-            	if (c == '\n')
-                    continue;
-            	if (c != ':') {
-                    if (first) {
-fail1:
-			fclose(f);
-                        return 0;
-                    }
-                    break;
-            	}
-            	len = hex(f);
-            	if (len < 0)
-                    	goto fail1;
-            	addr = hex(f);
-            	if (addr < 0)
-                    	goto fail1;
-            	i = hex(f);
-            	if (i < 0)
-                    	goto fail1;
-            	addr = (addr<<8)+i;
-            	int type = hex(f);
-            	if (type < 0)
-                    	goto fail1;
-            	if (type == 0x01)
-                    	break;
-            	if (first) 
-                	first = 0;
-            	for (i = 0; i < len; i++) {
-                	int v = hex(f);
-                	if (v < 0)
-                        	break;
-            	}
-            	i = hex(f);
-            	if (i < 0)
-                	goto fail1;
-            	addr += len;
-            	if (addr > total)
-                    	total = addr;
-        }
-	if (total < 0 || total >= 65536) {
+	
+	if (fread(&hdr[0], 1, 4, f) != 4) {
 		fclose(f);
 		return 0;
 	}
-	unsigned char *data = (unsigned char *)malloc(total+10);
+	unsigned short addr = hdr[0]|(hdr[1]<<8);
+	unsigned short len = hdr[2]|(hdr[3]<<8);
+	unsigned char *data = (unsigned char *)malloc(len);
 	if (!data) {
 		fclose(f);
 		return 0;
 	}
-	memset(data, 0xff, total+10);
-	rewind(f);
-	first = 1;
-	for(;;) {
-	    	int c;
-            	int i;
-            	int sum=0, len, addr;
-		c = fgetc(f);
-		if (c < 0)
-			break;
-            	if (c == '\n')
-                    continue;
-            	if (c != ':') {
-                    if (first) {
-fail2:
-			fclose(f);
-			free(data);
-                        return 0;
-                    }
-                    break;
-            	}
-            	len = hex(f);
-            	if (len < 0)
-                    	goto fail2;
-            	sum += len;
-            	addr = hex(f);
-            	if (addr < 0)
-                    	goto fail2;
-            	sum += addr;
-            	i = hex(f);
-            	if (i < 0)
-                    	goto fail2;
-            	sum += i;
-            	addr = (addr<<8)+i;
-            	int type = hex(f);
-            	if (type < 0)
-                    	goto fail2;
-            	sum += type;
-            	if (type == 0x01)
-                    	break;
-            	if (first) 
-                	first = 0;
-            	for (i = 0; i < len; i++) {
-                	int v = hex(f);
-                	if (v < 0)
-                        	break;
-			if ((addr+i) >= total)
-				break;
-                	data[(addr+i)&0xffff] = v;
-                	sum += v;
-            	}
-            	i = hex(f);
-            	if (i < 0)
-                	goto fail2;;
-            	if (i != ((0x100-(sum&0xff))&0xff)) 
-			goto fail2;
-            	addr += len;
-            	if (addr > total)
-                    	total = addr;
-        }
+	if (fread(data, 1, len, f) != len) {
+		free(data);
+		fclose(f);
+		return 0;
+	}
 	fclose(f);
-	
+	if (arch != data[6]) {
+		fprintf(stderr, "file '%s' architecture tag (%d) does not match request (%d)\n", file, data[6], arch);
+		free(data);
+		return 0;
+	}
+	if (code_base != data[7]) {
+		fprintf(stderr, "file '%s' code_base tag (%d) does not match request (%d)\n", file, data[7], code_base);
+		free(data);
+		return 0;
+	}
+	int t = data[8]|(data[9]<<8);
+	if (version != t) {
+		fprintf(stderr, "file '%s' version tag (%d) does not match request (%d)\n", file, t, version);
+		free(data);
+		return 0;
+	}
 	suota_upload *sp = (suota_upload *)malloc(sizeof(*sp));
 	if (!sp) {
 		free(data);
 		return 0;
 	}
-	data[4] = arch;
-	data[5] = version;
-	data[6] = version>>8;
-	data[7] = version>>16;
-	data[8] = total+10;
-	data[9] = (total+10)>>8;
-	unsigned long crc = crc32(crc32(0L, Z_NULL, 0), &data[4], total+6);
-	data[0] = crc;
-	data[1] = crc>>8;
-	data[2] = crc>>16;
-	data[3] = crc>>24;
-	sp->len = total+10;
+	sp->len = len;
 	sp->data = data;
 	sp->key = key;
 	sp->arch = arch;
+	sp->base = addr;
+	sp->code_base = code_base;
 	sp->version = version;
 	sp->next = suota_list;
 	suota_list = sp;

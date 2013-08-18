@@ -21,9 +21,9 @@
 
 typedef struct packet {
 	unsigned char	type;
-	unsigned char	id[2];
 	unsigned char	arch;
-	unsigned char	version[3];
+	unsigned char	code_base;
+	unsigned char	version[2];
 	unsigned char	data[1];
 } packet;
 
@@ -39,12 +39,18 @@ typedef struct broadcast_filter {	// for playa protocol this is used as the firs
 #define P_TYPE_OTHERS		0x40 // writing your own code, want to add your own code
 			     	     // allocate something above here
 
-#define THIS_ARCH	1	// initial CC2533
-typedef struct code_hdr {
+#ifndef THIS_ARCH
+#define THIS_ARCH	1	// initial CC2533	// 0 unavailable as an extension
+#endif
+#ifndef THIS_CODE_BASE
+#define THIS_CODE_BASE	0	// initial CC2533
+#endif
+typedef struct code_hdr {	// caution: these offsets are hard coded in suota assembly, fixcrc and packet_interface.cpp
         unsigned char    crc[4];         
-	unsigned char    arch;
-        unsigned char    version[3];
         unsigned char    len[2];
+	unsigned char    arch;
+        unsigned char    code_base;
+        unsigned char    version[2];
         unsigned char    data[1];
 } code_hdr;
 

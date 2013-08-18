@@ -23,19 +23,6 @@
 #include "string.h"
 #include "packet_interface.h"
 
-static xxxx() __naked {
-	__asm;
-	.area CSEG    (CODE)
-	.globl	_CODE_HEADER
-_CODE_HEADER:
-	.db	0, 0, 0, 0	// CRC will go here
-	.db	THIS_ARCH
-	.db	0, 0, 0		// version (little endian)
-	.db	0, 0		// len from arch to end of code 
-	ljmp	_my_app
-	__endasm;
-}
-
 #define RX_SIZE 250
 #define TX_SIZE 250
 unsigned char __xdata rx_buff[RX_SIZE];
@@ -519,7 +506,7 @@ uart_setup()
 }
 
 
-static unsigned int my_app(unsigned char op) 
+unsigned int my_app(unsigned char op) 
 {
 	switch (op) {
 	case APP_INIT:
@@ -535,7 +522,6 @@ static unsigned int my_app(unsigned char op)
 		rf_set_key(&keys[rtx_key][0]);
 		break;
 	case APP_RCV_PACKET:
-		send_printf("Data\n");
 		send_rcv_packet();
 		break;
 	}

@@ -16,31 +16,19 @@
 // License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-#ifndef __suota_h_
-#define __suota_h_
+#include "interface.h"
+static xxxx() __naked {
+	__asm;
+	.area CODE    (CODE)
+	.globl	_CODE_HEADER
+_CODE_HEADER:
+	.db	0, 0, 0, 0	// CRC will go here
+	.db	0, 0		// len from arch to end of code 
+	.db	THIS_ARCH
+	.db	THIS_CODE_BASE
+	.db	0, 0		// version (little endian)
+	.globl	_my_app
+	ljmp	_my_app
+	__endasm;
+}
 
-typedef struct suota_req {
-	unsigned char arch;
-	unsigned char code_base;
-	unsigned char version[2];
-	unsigned char offset[2];
-} suota_req;
-
-typedef struct suota_resp {
-	unsigned char arch;
-	unsigned char code_base;
-	unsigned char version[2];
-	unsigned char offset[2];
-	unsigned char total_len[2];
-	unsigned char data[64];
-} suota_resp;
-
-#ifndef __cplusplus
-void incoming_suota_packet();
-u8 incoming_suota_version();
-void suota_setup();
-extern code_hdr  __code * __xdata current_code;
-extern __bit suota_enabled;
-#endif
-
-#endif

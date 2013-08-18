@@ -37,7 +37,6 @@
 #define PKT_CMD_SEND_PACKET_MAC			0x08
 #define PKT_CMD_PRINTF				0x09
 #define PKT_CMD_PING				0x0a
-#define PKT_CMD_SET_SUOTA_VERSION		0x0b
 #define PKT_CMD_RCV_PACKET_BROADCAST		0x0c
 #define	PKT_CMD_SET_PROMISCUOUS			0x0d
 #define	PKT_CMD_SET_RAW				0x0e
@@ -87,7 +86,8 @@
 //
 //	PKT_CMD_SET_SUOTA_VERSION
 //		2	arch
-//		2-4	version
+//		3	code_base
+//		4-5	version
 //
 
 #ifdef __cplusplus
@@ -114,8 +114,8 @@ extern void rf_reset(rf_handle handle);
 extern void rf_set_raw(rf_handle handle, int on);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
-extern void rf_set_suota_version(rf_handle handle, unsigned char arch, unsigned long version);
-extern int rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned long version, const char *file);
+extern void rf_send_repeat(rf_handle handle, int secs, int key,  unsigned char arch, unsigned char code_base, unsigned long version);
+extern int rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
 
 #ifdef __cplusplus
 
@@ -139,8 +139,8 @@ public:
 	int initialise(const char *file);
 	int initialize(const char *file) { return initialise(file);} 
 	int command(const char *cmd) { return command(cmd, 0, 0); }
-	void set_suota_version(unsigned char arch, unsigned long version);
-	int set_suota_upload(int key, unsigned char arch, unsigned long version, const char *file);
+	void send_repeat(int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version);
+	int set_suota_upload(int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
 private:
 	void	send_packet(int cmd, int, const unsigned char *);
 	static void *thread(void *);
@@ -157,13 +157,27 @@ private:
 		struct suota_upload *next;
 		unsigned char key;
 		unsigned char arch;
+		unsigned char code_base;
 		unsigned long version;
 		unsigned char *data;
 		unsigned long len;
+		unsigned short base;
 	
 	} suota_upload;
-	unsigned char rf_id[2];
 	suota_upload	*suota_list;
+	typedef struct suota_repeat {
+		struct suota_repeat *next;
+		int secs;
+		unsigned char key;
+		unsigned char arch;
+		unsigned char code_base;
+		unsigned char quit;
+		unsigned long version;
+		class rf_interface *parent;
+		pthread_cond_t  cond;
+	} suota_repeat;
+	static void *repeater(void *);
+	suota_repeat	*repeat_list;
 
 };
 

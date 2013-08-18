@@ -31,15 +31,16 @@ extern unsigned int (* __data x_app) (u8 v);
 #define APP_GET_MAC 		1
 #define APP_GET_KEY 		2
 #define APP_RCV_PACKET		3
+#define APP_LOW_LEVEL_INIT	0xff
 extern u8 __data rx_len;
 extern packet __xdata  * __data rx_packet;
-extern __bit rx_crypto;
-extern __bit rx_broadcast;
+__bit __at (0x00) rx_crypto;
+__bit __at (0x01) rx_broadcast;
 extern u8 __xdata * __data rx_mac;
 #define APP_WAKE		4
 #define APP_KEY			5
 extern u8 __pdata key;
-extern __bit key_down;
+__bit __at (0x02) key_down;
 #define		KEY_X		0
 #define		KEY_O		1
 #define		KEY_LEFT	2
@@ -48,8 +49,8 @@ extern __bit key_down;
 // call backs
 extern void leds_rgb(unsigned char * __xdata);
 extern void leds_off();
-void rf_receive_on(void);
-void rf_receive_off(void);
+extern void rf_receive_on(void);
+extern void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
 extern u8 __data rtx_key;
@@ -68,7 +69,7 @@ extern void rf_set_raw(u8 on);
 extern unsigned char daylight(void);
 extern void keys_on();
 extern void keys_off();
-void uart_init();
+extern void uart_init();
 extern void putchar(char c);
 extern void putstr(char __code *cp);
 extern void puthex(unsigned char v);
