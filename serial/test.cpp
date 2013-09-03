@@ -88,9 +88,16 @@ main(int argc, char **argv)
 	}
 	rfp = new rf_interface(tp, 0);
 	if (!rfp->opened_ok()) {
+		if (argc < 2) {
+			delete rfp;
+			rfp = new rf_interface("/dev/ttyACM1", 0);
+			if (rfp->opened_ok()) 
+				goto ok;
+		}
 		fprintf(stderr, "%s: failed to open '%s'\n", argv[0], tp);
 		exit(99);
 	}
+ok:
 	if (init) {	// non interactive versions
 		rfp->initialise(init);
 		for (;;)

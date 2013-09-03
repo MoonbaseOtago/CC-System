@@ -77,6 +77,10 @@ while (<>) {
 	if (/^C: *([0-9A-F][0-9A-F]*) *_rf_set_channel .*$/ ) {
 		printf STDOUT "-g _rf_set_channel=0x%x\n", hex($1);
 	}
+#  rf_set_key_c
+	if (/^C: *([0-9A-F][0-9A-F]*) *_rf_set_key_c .*$/ ) {
+		printf STDOUT "-g _rf_set_key_c=0x%x\n", hex($1);
+	}
 #  rf_set_key
 	if (/^C: *([0-9A-F][0-9A-F]*) *_rf_set_key .*$/ ) {
 		printf STDOUT "-g _rf_set_key=0x%x\n", hex($1);

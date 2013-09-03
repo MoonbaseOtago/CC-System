@@ -36,7 +36,7 @@ u8 __data rx_len;
 packet __xdata  * __data rx_packet;
 u8 __xdata * __data rx_mac;
 static __bit rx_raw=0;
-__xdata static u8 tmp[128];
+__xdata static u8 tmp[128+32];
 __xdata static u8 cipher[128];
 __pdata static u8 nonce_tx[16];
 __pdata static u8 nonce_rx[16];
@@ -202,15 +202,66 @@ void x_ph() __naked
 #define pdd(x, y)
 #endif
 void
-rf_set_key(u8 __xdata * key)
+rf_set_key(u8 __xdata * key) __naked
 {
-    u8 i;
-ps("key=");pd(key, 16);pf("\n");
-    aes_done();
-    ENCCS = (ENCCS & ~0x07) | 0x04;	// AES_LOAD_KEY
-    ENCCS |= 0x01;			// start
-    for (i=0; i<16; i++) 
-        ENCDI = *key++;
+	__asm;			//	u8 i;
+				//	ps("key=");pd(key, 16);pf("\n");
+	mov	a, _ENCCS	//	ENCCS = (ENCCS & ~0x07) | 0x04;	// AES_LOAD_KEY
+	anl	a, #~0x7
+	orl	a, #4
+	mov	_ENCCS, a
+    	orl	_ENCCS, #1	//	ENCCS |= 0x01;			// start
+	mov	r0, #16		//	for (i=0; i<16; i++) 
+0002$:		movx	a, @dptr//		ENCDI = *key++;
+#ifdef NOTDEF
+push dpl
+push dph
+push acc
+mov dpl, a
+lcall _puthex
+pop acc
+pop dph
+pop dpl
+#endif
+		inc	dptr
+		mov	_ENCDI, a
+		djnz	r0, 0002$
+0001$:	mov	a, _ENCCS	//	aes_done();
+	jnb	_ACC_3, 0001$
+   	ret
+	__endasm;
+}
+
+void
+rf_set_key_c(u8 __code * key) __naked
+{
+	__asm;			//	u8 i;
+				//	ps("key=");pd(key, 16);pf("\n");
+	mov	a, _ENCCS	//	ENCCS = (ENCCS & ~0x07) | 0x04;	// AES_LOAD_KEY
+	anl	a, #~0x7
+	orl	a, #4
+	mov	_ENCCS, a
+    	orl	_ENCCS, #1	//	ENCCS |= 0x01;			// start
+	mov	r0, #16		//	for (i=0; i<16; i++) 
+0002$:		clr	a
+		movc	a, @a+dptr//		ENCDI = *key++;
+#ifdef NOTDEF
+push dpl
+push dph
+push acc
+mov dpl, a
+lcall _puthex
+pop acc
+pop dph
+pop dpl
+#endif
+		inc	dptr
+		mov	_ENCDI, a
+		djnz	r0, 0002$
+0001$:	mov	a, _ENCCS	//	aes_done();
+	jnb	_ACC_3, 0001$
+   	ret
+	__endasm;
 }
 
 void
@@ -647,10 +698,12 @@ rcv_handler(task __xdata* ppp) __naked
 //	21:	data
 //	n-8:	8 crypto
 //
+	clr	EA
 0001$:						//	for(;;) {
 	jnb	_rx_rset, 0002$			//		if (rx_rset) {
 		jb	_rx_busy1, 0003$	//			if (!rx_busy1)
-0006$:			ret			//				return;
+0006$:			setb	EA
+			ret			//				return;
 0003$:		mov	dptr, #_rx_data1	//			rx_data = &rx_data1[0];
 		mov	_rx_len, _rx_len1	//			rx_len = rx_len1;
 		sjmp	0004$			//		} else {
@@ -658,7 +711,8 @@ rcv_handler(task __xdata* ppp) __naked
 						//				return;
 		mov	dptr, #_rx_data0	//			rx_data = &rx_data0[0];
 		mov	_rx_len, _rx_len0	//			rx_len = rx_len0;
-0004$:		mov	_rx_data, dpl 		//		}
+0004$:		setb	EA
+		mov	_rx_data, dpl 		//		}
 		mov	_rx_data+1, dph
 
 		movx	a, @dptr
@@ -667,11 +721,11 @@ rcv_handler(task __xdata* ppp) __naked
 		movx	a, @dptr
 		jnb	_ACC_2, 0007$		//		if (rx_data[1]&(1<<2)) {	// mac dest
 			clr	_rx_broadcast	//			rx_broadcast = 0;	
-			mov	r2, #HDR_SIZE-2+8+6//			hdr = HDR_SIZE-2+8;
+			mov	r2, #(HDR_SIZE+8+6-2)//			hdr = HDR_SIZE-2+8;
 						//			rx_mac = &rx_data[5+8];
 			mov	a, #5+8-1
-						//		} else {
-0007$:			mov	r2, #HDR_SIZE+6	//			hdr = HDR_SIZE;
+			sjmp	0010$		//		} else {
+0007$:			mov	r2, #(HDR_SIZE+6)	//			hdr = HDR_SIZE;
 			setb	_rx_broadcast	//			rx_broadcast = 1;
 						//			rx_mac = &rx_data[5+2];
 			mov	a, #5+2-1
@@ -731,9 +785,12 @@ rcv_handler(task __xdata* ppp) __naked
 			cjne	a, _rtx_key, 0015$
 				sjmp	0016$
 0015$:
-				mov	_rtx_key, a//				rtx_key = rx_data[hdr+5];
-				mov	dpl, #APP_GET_KEY//			app(APP_GET_KEY);
 				push	ar2
+				mov	_rtx_key, a//				rtx_key = rx_data[hdr+5];
+				jnb	_ACC_7, 0415$
+					lcall	_suota_get_key
+					sjmp	0017$
+0415$:				mov	dpl, #APP_GET_KEY//			app(APP_GET_KEY);
 				mov	a,#0017$
 				push	acc
 				mov	a,#(0017$ >> 8)
@@ -998,6 +1055,7 @@ rcv_handler(task __xdata* ppp) __naked
 				lcall	_incoming_suota_version//	 if (incoming_suota_version(rx_packet))
 				mov	a, dpl		//			return;
 				jnz	0703$
+
 				mov	dpl, _rx_packet	//		if  (rx_packet->type == P_TYPE_SUOTA_REQ || rx_packet->type == P_TYPE_SUOTA_RESP) {
 				mov	dph, _rx_packet+1//			incoming_suota_packet(rx_packet, rx_len);
 				movx	a, @dptr	//				return;
@@ -1030,15 +1088,15 @@ rcv_handler(task __xdata* ppp) __naked
 		push	_x_app
 		push	_x_app+1
 		ret
-0703$:							//done:
+0703$:		clr	EA				//done:
 		jnb	_rx_rset, 0704$			//	if (rx_rset) {
 			clr	_rx_busy1		//		rx_busy1 = 0;
 			clr	_rx_rset		//		rx_rset = 0;
-			sjmp	0705$			//	} else {
+			ljmp	0001$			//	} else {
 0704$:			clr	_rx_busy0		//		rx_busy0 = 0;
 			setb	_rx_rset		//		rx_rset = 1;
 							//	}
-0705$:	ljmp	0001$					// }
+			ljmp	0001$			// }
 	__endasm;
 }
 
@@ -1185,10 +1243,14 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		pop	dpl
 		sjmp	0216$
 
+0217$:		mov	_rtx_key, a
+		lcall   _suota_get_key
+		sjmp	0216$
+
 0219$:		clr	_xmt_crypto
 		jb	_ACC_0, 0216$
 		setb	_xmt_crypto
-		cjne    a, _rtx_key, 0215$	// }
+		cjne    a, _rtx_key, 0217$	// }
 0216$:
 	mov	r6, dpl
 	mov	r7, dph		// pkt
@@ -1252,11 +1314,12 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r4, a
 	setb	_xmt_broadcast
 	orl	a, r3
+	mov	r2, a
 	jz	2012$
 		clr	_xmt_broadcast
-		mov	a, #8
+		mov	a, #6
+		mov	r2, #1<<2
 2012$:
-	mov	r2, a
 	jb	_xmt_crypto, 0012$
 		add	a, r5		//		RFD = len+HDR_SIZE+0;
 		add	a, #HDR_SIZE+2
@@ -1276,8 +1339,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	inc	dptr			//	      		(0<<4)|	// frame pending
 					//	      		(0<<5)|	// ack request 
 					//	     		(1<<6);	// pan compression
-	mov	a, r2
-	rr	a	// 4 or 0  -> dest addressing 64-bit or 16-bit broadcast (3<<2)
+	mov	a, r2			// addressing type
 	orl	a, #(2<<2)|(1<<4)|(3<<6)//	RFD = *p++ =	(2<<2)| // dest addressing (16-bit broadcast)
 	mov	_RFD, a			//		    	(1<<4)|	// frame version
 	movx	@dptr, a		//		      	(3<<6);	// source addressing 64-bit address
@@ -1303,6 +1365,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		movx    @dptr, a	//	RFD = *p++ = 0xff;	// dest broadcast pan
 		inc	dptr
 		movx    @dptr, a
+		inc	dptr
 		mov     _RFD, a
 		mov     _RFD, a
 		mov	r2, #8		//	RFD = *p++ = *xmac++;	// dest addres
@@ -1453,7 +1516,7 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 0128$:
 			movx	@dptr, a
 			inc	dptr
-			djnz	r3, 0128$
+			djnz	r2, 0128$
 
 0127$:
 		// tmp[] contains
@@ -1477,6 +1540,14 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		mov	_DPL1, #_cipher
 		mov	_DPH1, #_cipher>>8
 		lcall	_aes_op_cbc_mac
+#ifdef RDEBUG
+				sjmp	5201$
+5202$:				.ascii "X1"
+5203$:				.db 0x0A
+				.db 0x00
+5201$:				mov	dptr, #5202$		//	ps("iv=");pdd(iv, 16);pf("\n");
+				lcall	_x_pf
+#endif
 		
 		mov	r0, #_iv		//	iv[0] = 1;
 		mov	a, #1

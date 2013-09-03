@@ -303,9 +303,11 @@ void sleep_isr()  __interrupt(5) __naked
 void putchar(char c)	__naked`
 {
 	__asm;
+	push	ACC
 	mov	_U0DBUF, dpl	//		U0DBUF = c;
-0004$:	jnb	_UTX0IF, 0004$
-	clr	_UTX0IF
+0004$:	mov	a, _U0CSR
+	jb	_ACC_0, 0004$
+	pop	ACC
 	ret
 	__endasm;
 }
@@ -321,16 +323,16 @@ putstr(char __code *cp) __naked
 		ret
 0002$: 	cjne	a, #'\n', 0003$	//	if (*cp == '\n') {
 	mov	_U0DBUF, #13	//		U0DBUF = 13;
-0004$:	jnb	_UTX0IF, 0004$
-	clr	_UTX0IF
+0004$:	mov	a, _U0CSR
+	jb	_ACC_0, 0004$
 	mov	_U0DBUF, #10	//		U0DBUF = 10;
-0014$:	jnb	_UTX0IF, 0014$
-	clr	_UTX0IF
+0014$:	mov	a, _U0CSR
+	jb	_ACC_0, 0014$
 	sjmp    0001$
 0003$:		//		} else {
 	mov	_U0DBUF, a	//		U0DBUF = c;
-0034$:	jnb	_UTX0IF, 0034$
-	clr	_UTX0IF
+0034$:	mov	a, _U0CSR
+	jb	_ACC_0, 0034$
 	sjmp	0001$		//	}
 	__endasm;		// }
 }
@@ -350,8 +352,8 @@ puthex(unsigned char v)	__naked
 		add	a, #'a'-10//		i += 'a'-10
 				//	}
 0003$:	mov	_U0DBUF, a	//	putchar(i);
-0094$:	jnb	_UTX0IF, 0094$
-	clr	_UTX0IF
+0094$:	mov	a, _U0CSR
+	jb	_ACC_0, 0094$
 
 0024$:
 	mov	a, dpl
@@ -365,10 +367,78 @@ puthex(unsigned char v)	__naked
 		add	a, #'a'-10//		i += 'a'-10
 				//	}
 0013$:	mov	_U0DBUF, a	//	putchar(i);
-0084$:	jnb	_UTX0IF, 0084$
-	clr	_UTX0IF
+0084$:	mov	a, _U0CSR
+	jb	_ACC_0, 0084$
 	ret
 	__endasm;
+}
+
+void dump_wait_list(char __code *cp) __naked
+{
+//#define TDEBUG
+#ifdef TDEBUG
+	__asm;
+	lcall	_putstr
+	mov	dpl, _waitq
+	mov	dph, _waitq+1
+0001$:
+	mov	a, dpl
+	orl	a, dph	
+	jnz	0002$
+		mov	_U0DBUF, #13
+0032$:		mov	a, _U0CSR
+		jb	_ACC_0, 0032$
+		mov	_U0DBUF, #10
+0033$:		mov	a, _U0CSR
+		jb	_ACC_0, 0033$
+		ret
+0002$:	push 	dpl
+	push 	dph
+	push	dpl
+	mov	_U0DBUF, #'('	
+0034$:	mov	a, _U0CSR
+	jb	_ACC_0, 0034$
+	mov	dpl, dph
+	lcall	_puthex
+	pop	dpl
+	lcall	_puthex
+	mov	_U0DBUF, #','	
+0035$:	mov	a, _U0CSR
+	jb	_ACC_0, 0035$
+	pop 	dph
+	pop	dpl
+	inc	dptr
+	inc	dptr
+	movx	a, @dptr
+	inc	dptr
+	push	acc
+	movx	a, @dptr
+	inc	dptr
+	push 	dpl
+	push 	dph
+	mov	dpl, a
+	lcall	_puthex
+	pop 	dph
+	pop	dpl
+	pop	acc
+	push 	dpl
+	push 	dph
+	mov	dpl, a
+	lcall	_puthex
+	pop 	dph
+	pop	dpl
+	mov	_U0DBUF, #')'	
+0036$:	mov	a, _U0CSR
+	jb	_ACC_0, 0036$
+	movx	a, @dptr
+	push	acc
+	inc	dptr
+	movx	a, @dptr
+	mov	dph, a
+	pop	dpl
+	sjmp	0001$
+	__endasm;
+#endif
 }
 
 void
@@ -416,6 +486,27 @@ void
 queue_task(task __xdata * t, unsigned int time) __naked
 {
 	__asm;
+#ifdef TDEBUG
+	push	dpl
+	push	dph
+	push	dpl
+	push	dph
+sjmp 0101$
+0102$:	.ascii	"queue "
+	.db	0
+0103$:	.ascii	" "
+	.db	0
+0101$:	mov	dptr, #0102$
+	lcall	_putstr
+	pop	dpl
+	lcall	_puthex
+	pop	dpl
+	lcall	_puthex
+	mov	dptr, #0103$
+	lcall	_dump_wait_list
+	pop	dph
+	pop	dpl
+#endif
 	mov	r4, dpl
 	mov	r5, dph		// t
 	push 	_IEN0
@@ -424,6 +515,12 @@ queue_task(task __xdata * t, unsigned int time) __naked
 	mov	a, dpl		// delta
 	mov	r6, a
 	mov	r7, dph	
+#ifdef TDEBUG
+push acc
+lcall	xlog6
+pop acc
+#endif
+	mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
 //	for (pt = waitq; delta && pt; pt = pt->next) {
 //		if (pt->time > delta) {
 //			pt->time -= delta;
@@ -452,7 +549,7 @@ qt_1:	// a contains dpl
 		inc	dptr
 		movx	a, @dptr
 		subb	a, r7
-		mov	_DPS, #1
+		inc	_DPS
 		jc	qt_3		// if (pt->time > delta) 
 			mov	r0, a		// pt->time -= delta;
 			mov	a, r2
@@ -460,7 +557,7 @@ qt_1:	// a contains dpl
 			inc 	dptr
 			mov	a, r0
 			movx	@dptr, a
-			clr	_DPS
+			dec	_DPS
 			sjmp	qt_2
 qt_3:		mov	r3, a	
 		clr	a	// pt->time = 0;
@@ -469,7 +566,7 @@ qt_3:		mov	r3, a
 		movx	@dptr, a
 		inc 	dptr
 
-		mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
+		//mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
 		subb	a, r2	// delta -= pt->time;
 		mov	r6, a
 		clr	a
@@ -481,12 +578,12 @@ qt_3:		mov	r3, a
 		mov	_DPL0, a
 		movx	a, @dptr
 		mov	_DPH0, a
-		clr	_DPS
+		dec	_DPS
 		orl	a, r0	// if pt == null break
 		jz	qt_2
-		mov	a, r6
-		orl	a, r7
-		jnz	qt_1
+			mov	a, r6
+			orl	a, r7
+			jnz	qt_1
 qt_2:
 //	if (t->state == TASK_QUEUED) {
 //		t->state = TASK_IDLE;
@@ -540,18 +637,18 @@ qt_5:
 				mov	dpl, r3
 
 				cjne	r2, #0, qt_8	// if (prev)
-					mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
+					//mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
 					mov	_waitq, dpl	// 	waitq = dptr0
 					mov	_waitq+1, dph
 					sjmp	qt_9		// else
 qt_8:
-					mov 	_DPS, #1
+					inc 	_DPS
 					mov	a, _DPL0 	//	prev->next = dptr0
 					movx	@dptr, a
 					inc	dptr
 					mov	a, _DPH0
 					movx	@dptr, a
-					mov 	_DPS, #0
+					dec 	_DPS
 qt_9:
 				mov	a, dpl
 				orl	a, dph
@@ -563,11 +660,12 @@ qt_9:
 					movx	@dptr, a
 					inc 	dptr
 					movx	a, @dptr
+					addc	a, r1
 					movx	@dptr, a
 					sjmp	qt_4
 
 qt_6:
-			mov	r1, #1
+			mov	r2, #1
 			mov	dpl, r0
 			mov	dph, r1
 			inc	dptr
@@ -644,19 +742,29 @@ qt_11:						// for (;;) {
 qt_12:						// if (pt == 0) {	// end of Q
 		
 qt_99:	
+#ifdef TDEBUG
+ //lcall	xlog3
+ //lcall	xlog4
+ push dpl
+ push dph
+ mov dptr, #i0033
+ lcall _dump_wait_list
+ pop dph
+ pop dpl
+#endif
 		cjne	r2, #0, qt_14		//      if (prev) {
-			mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
+			//mov	_enter_sleep_mod_flag, #0 // enter_sleep_mod_flag = 0;
 			mov	_waitq, r4	//		waitq = t
 			mov	_waitq+1, r5	//	
 			sjmp	qt_15
 qt_14:						//      } else {
-			mov	_DPS, #1
+			inc	_DPS
 			mov	a, r4
 			movx	@dptr, a	//		*prev = t
 			inc	dptr
 			mov	a, r5
 			movx	@dptr, a
-			mov	_DPS, #0	//	}
+			dec	_DPS		//	}
 qt_15:		mov	dpl, r4	// dptr = t
 		mov	dph, r5
 		inc	dptr
@@ -677,6 +785,14 @@ qt_15:		mov	dpl, r4	// dptr = t
 		inc	dptr
 		mov	a, #TASK_QUEUED		//	t->state = TASK_QUEUED;
 		movx	@dptr, a
+#ifdef TDEBUG
+ sjmp $0064
+$0063:	.ascii " post-queue "
+	.db	0
+$0064: 	
+	mov	dptr, #$0063
+	lcall _dump_wait_list
+#endif
 		pop	_IEN0
 		ret				//	return
 						// }
@@ -709,7 +825,7 @@ qt_13:
 			inc	dptr		
 			mov	a, _tmp1
 			movx    @dptr, a	//	t->time = time
-			sjmp	qt_99
+			ajmp	qt_99
 		
 //		if (pt->time <= time) {
 //			time -= pt->time;
@@ -739,6 +855,53 @@ qt_98:
 			mov	r2, #1
 			ajmp	qt_11		//}
 
+#ifdef TDEBUG
+xlog6:
+	push	dpl
+	push	dph
+	mov	dptr, #0157$
+	lcall	_putstr
+	mov	dpl, r7
+	lcall	_puthex
+	mov	dpl, r6
+	lcall	_puthex
+	pop	dph
+	pop	dpl
+	ret
+0157$:	.ascii	"timer "
+	.db	0
+xlog3:
+	push	dpl
+	push	dph
+	mov	dptr, #0152$
+	lcall	_putstr
+	mov	dpl, r5
+	lcall	_puthex
+	mov	dpl, r4
+	lcall	_puthex
+	pop	dph
+	pop	dpl
+	ret
+0152$:	.ascii	"r5/4 "
+	.db	0
+xlog4:
+	push	dpl
+	push	dph
+	mov	dptr, #0153$
+	lcall	_putstr
+	mov	dpl, r7
+	lcall	_puthex
+	mov	dpl, r6
+	lcall	_puthex
+	pop	dph
+	pop	dpl
+	ret
+0153$:	.ascii	"r7/6 "
+	.db	0
+i0033:	//.db	0x0a
+	.ascii "pre-queue "
+	.db	0
+#endif
 
 		
 	__endasm;
@@ -748,8 +911,30 @@ void
 cancel_task(task __xdata* t) __naked
 {
 	__asm;
+#ifdef TDEBUG
+	push	dpl
+	push	dph
+	push	dpl
+	push	dph
+sjmp 0201$
+0202$:	.ascii	"cancel "
+	.db	0
+0203$:	.ascii	" "
+	.db	 0
+0201$:	mov	dptr, #0202$
+	lcall	_putstr
+	pop	dpl
+	lcall	_puthex
+	pop	dpl
+	lcall	_puthex
+	mov	dptr, #0203$
+	lcall	_dump_wait_list
+	pop	dph
+	pop	dpl
+#endif
 	mov	r6, dpl		// 
 	mov	r7, dph
+
 	push	_IEN0		// s=EA;
 	clr	EA		// EA = 0;
 	mov	r2, #0
@@ -799,19 +984,40 @@ ct_3:					// 	}
 			mov	_waitq+1, r5
 			pop	_IEN0	// EA = s;
 			ret
-ct_8:			mov 	_DPS, #1
+ct_8:			inc 	_DPS
 			mov	a, r4 	//	prev->next = dptr0
 			movx	@dptr, a
 			inc	dptr
 			mov	a, r5
 			movx	@dptr, a
-			mov 	_DPS, #0
-			pop	_IEN0	// EA = s;
+			dec 	_DPS
+ct_9:			pop	_IEN0	// EA = s;
 			ret
 			
 	//	}
 
 ct_2:
+
+#ifdef TDEBUG
+push dpl
+push dph
+push dpl
+mov dpl, dph
+lcall _puthex
+pop dpl
+lcall _puthex
+mov	dpl, #13	//		U0DBUF = c;
+lcall	_putchar
+mov	dpl, #10	//		U0DBUF = c;
+lcall	_putchar
+pop dph
+pop dpl
+#endif
+
+	mov	a, dpl
+	orl	a, dph
+	jz	ct_9
+
 	inc	dptr
 	inc	dptr
 	inc	dptr
@@ -825,7 +1031,7 @@ ct_2:
 	mov	dph, a
 	mov	dpl, r2
 	mov	r2, #1
-	sjmp	ct_1		// }
+	ajmp	ct_1		// }
 	__endasm;
 }
 
@@ -942,6 +1148,13 @@ main()
 	mov	r7, #0	
 m_1:				//  for (;;) {
 distribute:
+#ifdef TDEBUG
+		sjmp	0707$
+0706$:		.ascii "."
+		.db	0
+0707$:		mov	dptr, #0706$
+		lcall	_dump_wait_list
+#endif
 		mov	dpl, _waitq	//	for (xpt = waitq;;) {
 		mov	dph, _waitq+1
 m_2:			mov	a, dph
@@ -988,6 +1201,13 @@ m_6a:			movx	@dptr, a
 			mov	dph, a
 			sjmp	m_2a	//	}
 m_4:					// for (;;) {
+#ifdef TDEBUG
+		sjmp	0717$
+0716$:		.ascii "-"
+		.db	0
+0717$:		mov	dptr, #0716$
+		lcall	_dump_wait_list
+#endif
 		mov	dpl, _waitq	//	xpt = waitq;
 		mov	dph, _waitq+1
 		mov	a, dpl		//	if (!xpt) break
@@ -1002,6 +1222,9 @@ m_4:					// for (;;) {
 		inc	dptr
 		movx 	a, @dptr
 		cjne	a, #0, m_8
+#ifdef TDEBUG
+		acall	xlog1
+#endif
 		push 	dpl
 		push 	dph
 		mov	dpl, #0xff	//	start_timer(60000);
@@ -1037,6 +1260,9 @@ m_4:					// for (;;) {
 		mov	dph, r7
 		ret
 m_ret:
+#ifdef TDEBUG
+		lcall	xlog2
+#endif
 		pop	dph
 		pop	dpl
 		clr	EA		//	EA = 0;
@@ -1054,6 +1280,9 @@ m_9:
 m_9a:
 			ajmp	distribute
 m_8:
+#ifdef TDEBUG
+		//lcall	xlog5
+#endif
 		mov	a, _waitq	// if (!waitq) {
 		orl	a, _waitq+1
 		jnz	m_10
@@ -1069,6 +1298,8 @@ m_8a:
 			mov	r6, #0	//		delta = 0;
 			mov	r7, #0
 			ajmp	m_1
+
+
 m_10:					//	} else {
 			mov	dpl, _waitq
 			mov	dph, _waitq+1
@@ -1101,5 +1332,45 @@ m_11a:				clr	EA	//		EA = 0;
 				ajmp	m_1		//  }
 							// }
 							//}
+#ifdef TDEBUG
+xlog1:
+	push	dpl
+	push	dph
+	mov	dptr, #0102$
+	lcall	_putstr
+	mov	dpl, r7
+	lcall	_puthex
+	mov	dpl, r6
+	lcall	_puthex
+	mov	dptr, #0103$
+	lcall	_dump_wait_list
+	pop	dph
+	pop	dpl
+	ret
+0102$:	.ascii	"call "
+	.db	0
+0103$:	.ascii	" "
+	.db 	0
+xlog2:
+	push	dpl
+	push	dph
+	mov	dptr, #0202$
+	lcall	_putstr
+	pop	dph
+	pop	dpl
+	ret
+0202$:	.ascii	"done"
+0203$:	.db 0x0a, 0
+xlog5:
+	push	dpl
+	push	dph
+	mov	dptr, #0312$
+	lcall	_dump_wait_list
+	pop	dph
+	pop	dpl
+	ret
+0312$:	.ascii	"sleeping "
+0313$:	.db 0x0a, 0
+#endif
 	__endasm;
 }

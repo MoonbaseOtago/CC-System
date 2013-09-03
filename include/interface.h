@@ -30,17 +30,20 @@ extern unsigned int (* __data x_app) (u8 v);
 #define APP_INIT		0
 #define APP_GET_MAC 		1
 #define APP_GET_KEY 		2
-#define APP_RCV_PACKET		3
+#define APP_GET_SUOTA_KEY 	3
+#define APP_RCV_PACKET		4
 #define APP_LOW_LEVEL_INIT	0xff
 extern u8 __data rx_len;
 extern packet __xdata  * __data rx_packet;
 __bit __at (0x00) rx_crypto;
 __bit __at (0x01) rx_broadcast;
 extern u8 __xdata * __data rx_mac;
-#define APP_WAKE		4
-#define APP_KEY			5
+#define APP_WAKE		5
+#define APP_KEY			6
 extern u8 __pdata key;
 __bit __at (0x02) key_down;
+__bit __at (0x03) suota_key_required;
+__bit __at (0x04) suota_enabled;
 #define		KEY_X		0
 #define		KEY_O		1
 #define		KEY_LEFT	2
@@ -53,6 +56,7 @@ extern void rf_receive_on(void);
 extern void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
 extern void rf_set_key(u8 __xdata *key);
+extern void rf_set_key_c(u8 __code * key);
 extern u8 __data rtx_key;
 extern void rf_set_mac(u8 __xdata *m);
 #define NO_CRYPTO	0xff

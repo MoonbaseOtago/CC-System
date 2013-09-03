@@ -48,6 +48,7 @@
 	.globl	_cancel_task
 	.globl	_uart_init
 	.globl	_rf_set_key
+	.globl	_rf_set_key_c
 	.globl	_rf_set_promiscuous
 	.globl	_rf_set_raw
 	.globl	_rf_set_mac
@@ -152,3 +153,6 @@ __43=_keys_off
 __44=_keys_on
 	.globl	__45
 __45=_system_attributes
+	.globl	__46
+__46=_rf_set_key_c
+	.globl	__33

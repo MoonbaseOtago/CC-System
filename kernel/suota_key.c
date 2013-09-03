@@ -16,19 +16,7 @@
 // License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 //
 
-#include "interface.h"
-static xxxx() __naked {
-	__asm;
-	.area CODE    (CODE)
-	.globl	_CODE_HEADER
-_CODE_HEADER:
-	.db	0, 0, 0, 0	// CRC will go here
-	.db	1, 0		// len from arch to end of code - '1' signals a standalone app
-	.db	THIS_ARCH
-	.db	THIS_CODE_BASE
-	.db	0, 0		// version (little endian)
-	.globl	_my_app
-	ljmp	_my_app
-	__endasm;
-}
+__code unsigned char suota_key[16] = {
+	0xcc, 0xb1, 0x7c, 0xb5, 0x74, 0x48, 0x63, 0x4c, 0xe5, 0x95, 0xc1, 0x5a, 0xcf, 0x96, 0x61, 0x45
+};
 

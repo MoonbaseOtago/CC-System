@@ -37,7 +37,7 @@ CFLAGS += -DTHIS_ARCH=$(THIS_ARCH) -DTHIS_CODE_BASE=$(THIS_CODE_BASE) -DTHIS_VER
 CFLAGS += -DKEYS
 LDLIBS_SA = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
 LDLIBS = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l libsdcc -l libint -l liblong -l libfloat
-LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y 
+LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=5 
 LDFLAGS = -muwx -b SSEG=0x80 $(LDLIBS) -M -Y 
 LDEVEN = -b GSINIT0=$(BASE0)
 LDODD  = -b GSINIT0=$(BASE1)
@@ -45,7 +45,7 @@ LDODD  = -b GSINIT0=$(BASE1)
 APP_NAME=app
 
 # kernel objects
-KOBJ = task.rel suota.rel rf.rel leds.rel keys.rel 
+KOBJ = task.rel suota.rel rf.rel leds.rel keys.rel suota_key.rel
 
 CFLAGS += -DAPP        
 AOBJ = $(APP_NAME).rel
@@ -115,7 +115,7 @@ kernel.lk:	kernel.map kernel/map.pl
 #		later patching of MAC addresses)
 #
 kernel.ihx kernel.map:	$(KOBJ) dummy.rel
-	$(LD)  $(LDFLAGS_SA) -l mcs51 -b BSEG=3 -b PSEG=0 -b XSEG=0x100 -i kernel.ihx $(KOBJ) dummy.rel 
+	$(LD)  $(LDFLAGS_SA) -l mcs51 -b PSEG=0 -b XSEG=0x100 -i kernel.ihx $(KOBJ) dummy.rel 
 
 
 #
@@ -129,6 +129,8 @@ keys.rel:	kernel/keys.c  include/rf.h include/task.h include/interface.h  includ
 	$(CC) $(CFLAGS) -c kernel/keys.c
 suota.rel:	kernel/suota.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
 	$(CC) $(CFLAGS) -c kernel/suota.c
+suota_key.rel:	kernel/suota_key.c		#change this if you want a private efault suota key
+	$(CC) $(CFLAGS) -c kernel/suota_key.c
 leds.rel:	kernel/leds.s  
 	$(AS)   -z -l -o leds.rel kernel/leds.s
 
@@ -184,7 +186,7 @@ packet_interface.o:	serial/packet_interface.h serial/packet_interface.cpp
 #
 SOBJ = serial_app.rel app_integrated.rel
 serial.ihx:	$(KOBJ) packet_interface.o $(SOBJ) 
-	$(LD) $(LDFLAGS_SA) -b BSEG=3  -i serial.ihx $(KOBJ) $(SOBJ)
+	$(LD) $(LDFLAGS_SA) -i serial.ihx $(KOBJ) $(SOBJ)
 serial_app.rel:	serial/serial_app.c  include/rf.h include/task.h include/interface.h  include/suota.h serial/packet_interface.h include/protocol.h
 	$(CC) $(CFLAGS) -c serial/serial_app.c
 

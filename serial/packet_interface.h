@@ -41,8 +41,12 @@
 #define	PKT_CMD_SET_PROMISCUOUS			0x0d
 #define	PKT_CMD_SET_RAW				0x0e
 #define	PKT_CMD_RESET				0x0f
+#define	PKT_CMD_SET_SUOTA_KEY			0x10
+#define PKT_CMD_SEND_PACKET_CRYPT_SUOTA		0x11
+#define PKT_CMD_SEND_PACKET_CRYPT_SUOTA_MAC	0x12
+#define	PKT_CMD_SET_SUOTA			0x13
 #define PKT_CMD_SEND_PACKET_CRYPT		0x20	// 0x20->0x27 depending on key
-#define PKT_CMD_SEND_PACKET_CRYPT_MAC		0x40	// 0x20->0x27 depending on key
+#define PKT_CMD_SEND_PACKET_CRYPT_MAC		0x40	// 0x40->0x47 depending on key
 #define PKT_CMD_RCV_PACKET_CRYPT		0x60	// only 1 key for now
 #define PKT_CMD_RCV_PACKET_CRYPT_BROADCAST	0x80	// only 1 key for now
 
@@ -96,7 +100,7 @@ extern "C" {
 #include <stdio.h>
 #include <pthread.h>
 typedef void *rf_handle;
-typedef void (*rf_rcv)(rf_handle, int broadcast, int crypt, unsigned char *mac, unsigned char *data, int len);
+typedef void (*rf_rcv)(rf_handle, int broadcast, int crypt, unsigned char key, unsigned char *mac, unsigned char *data, int len);
 extern rf_handle rf_open(const char *serial_device, rf_rcv rcv_callback);
 extern void rf_close(rf_handle handle);
 #define RF_NO_KEY (-1)
@@ -114,8 +118,9 @@ extern void rf_reset(rf_handle handle);
 extern void rf_set_raw(rf_handle handle, int on);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
 extern void rf_send_crypto(rf_handle handle, int key, const unsigned char *mac, const unsigned char *data, int len);
+extern void rf_send_repeat_suota_key(rf_handle handle, int secs, unsigned char *key,  unsigned char arch, unsigned char code_base, unsigned long version);
 extern void rf_send_repeat(rf_handle handle, int secs, int key,  unsigned char arch, unsigned char code_base, unsigned long version);
-extern int rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
+extern int rf_set_suota_upload(rf_handle handle, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
 
 #ifdef __cplusplus
 
@@ -140,22 +145,30 @@ public:
 	int initialize(const char *file) { return initialise(file);} 
 	int command(const char *cmd) { return command(cmd, 0, 0); }
 	void send_repeat(int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version);
-	int set_suota_upload(int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
+	void send_repeat_suota_key(int secs, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version);
+	int set_suota_upload(unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
 private:
+	void	send_suota_key(unsigned char * key);
+	void	set_suota_enable(int on);
+	void	send_repeat(int secs, int key, unsigned char * key_value, unsigned char arch, unsigned char code_base, unsigned long version);
 	void	send_packet(int cmd, int, const unsigned char *);
 	static void *thread(void *);
 	void 	rf_thread();
 	int	fd;
 	bool	shutdown;
+	bool	dump_outgoing;
 	rf_rcv 	callback;
 	FILE	*auto_dump;
 	pthread_mutex_t	mutex;
+	pthread_mutex_t	suota_mutex;
 	pthread_cond_t	cond;
 	pthread_t	tid;
+	static const unsigned char suota_key = 0xfe;
+	unsigned char current_suota_key[16];
 	int command(const char *cmd, const char *file, int line);
 	typedef struct suota_upload {
 		struct suota_upload *next;
-		unsigned char key;
+		unsigned char key[16];
 		unsigned char arch;
 		unsigned char code_base;
 		unsigned long version;
@@ -169,6 +182,7 @@ private:
 		struct suota_repeat *next;
 		int secs;
 		unsigned char key;
+		unsigned char key_value[16];
 		unsigned char arch;
 		unsigned char code_base;
 		unsigned char quit;

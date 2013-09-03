@@ -35,7 +35,6 @@
 //	C bindings
 //
 typedef void *rf_handle;
-typedef void (*rf_rcv)(rf_handle, int broadcast, int crypt, unsigned char *mac, unsigned char *data, int len);
 rf_handle
 rf_open(const char *serial_device, rf_rcv rcv_callback)
 {
@@ -151,8 +150,15 @@ rf_send_repeat(rf_handle handle, int secs, int key, unsigned char arch, unsigned
 	i->send_repeat(secs, key, arch, code_base, version);
 }
 
+void
+rf_send_repeat_suota_key(rf_handle handle, int secs, unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version)
+{
+	rf_interface *i = (rf_interface*)handle;
+	i->send_repeat_suota_key(secs, key, arch, code_base, version);
+}
+
 int
-rf_set_suota_upload(rf_handle handle, int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
+rf_set_suota_upload(rf_handle handle, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
 {
 	rf_interface *i = (rf_interface*)handle;
 	return i->set_suota_upload(key, arch, code_base, version, file);
@@ -166,6 +172,7 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 	fd = ::open(serial_device, O_RDWR|O_NDELAY);
 	if (fd < 0)
 		return;
+	memset(&current_suota_key[0], 0, sizeof(current_suota_key));
 	tcgetattr(fd, &tm);
 	cfmakeraw(&tm);
 	cfsetspeed(&tm, B9600);
@@ -173,8 +180,10 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 	callback = rcv_callback;
 	shutdown = 0;
 	auto_dump = 0;
+	dump_outgoing = 0;
 	repeat_list = 0;
 	pthread_mutex_init(&mutex, 0);
+	pthread_mutex_init(&suota_mutex, 0);
 	pthread_cond_init(&cond, 0);
 	pthread_create(&tid, 0, thread, this);
 }
@@ -209,6 +218,9 @@ rf_interface::~rf_interface()
 		free(sp->data);
 		free(sp);
 	}
+	pthread_cond_destroy(&cond);
+	pthread_mutex_destroy(&mutex);
+	pthread_mutex_destroy(&suota_mutex);
 }
 
 void
@@ -238,6 +250,15 @@ rf_interface::set_channel(int channel)
 	send_packet(PKT_CMD_SET_CHANNEL, 1, &c);
 }
 
+void
+rf_interface::send_suota_key(unsigned char *key)
+{
+	if (memcmp(key, &current_suota_key[0], sizeof(current_suota_key)) == 0)
+		return;
+	memcpy(&current_suota_key[0], key, sizeof(current_suota_key));
+	send_packet(PKT_CMD_SET_SUOTA_KEY, 16, &current_suota_key[0]);
+}
+
 void *
 rf_interface::repeater(void *p)
 {
@@ -256,12 +277,20 @@ rf_interface::repeater(void *p)
 			pthread_mutex_unlock(&rp->parent->mutex);
 			return 0;
 		}
+		pthread_mutex_unlock(&rp->parent->mutex);
+		if (rp->key == suota_key) {
+			pthread_mutex_lock(&rp->parent->suota_mutex);
+			rp->parent->send_suota_key(&rp->key_value[0]);
+		}
 		pkt.type = P_TYPE_NOP;
 		pkt.arch = rp->arch;
 		pkt.code_base = rp->code_base;
 		pkt.version[0] = rp->version;
 		pkt.version[1] = rp->version>>8;
 		rp->parent->send_crypto(rp->key, 0, (unsigned char *)&pkt, sizeof(pkt));
+		if (rp->key == suota_key) 
+			pthread_mutex_unlock(&rp->parent->suota_mutex);
+		pthread_mutex_lock(&rp->parent->mutex);
 		gettimeofday(&now, 0);
 		timeout.tv_sec = now.tv_sec + rp->secs;
               	timeout.tv_nsec = now.tv_usec * 1000;
@@ -272,6 +301,19 @@ rf_interface::repeater(void *p)
 
 void
 rf_interface::send_repeat(int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version)
+{
+	send_repeat(secs, key, 0, arch, code_base, version);
+}
+
+void
+rf_interface::send_repeat_suota_key(int secs, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version)
+{
+	send_repeat(secs, suota_key, key, arch, code_base, version);
+}
+
+
+void
+rf_interface::send_repeat(int secs, int key, unsigned char * key_value, unsigned char arch, unsigned char code_base, unsigned long version)
 {
 	suota_repeat *rp;
 	pthread_t t;
@@ -309,6 +351,8 @@ rf_interface::send_repeat(int secs, int key, unsigned char arch, unsigned char c
 	rp->next = repeat_list;
 	repeat_list = rp;
 	rp->key = key;
+	if (key_value)
+		memcpy(&rp->key_value[0], key_value, sizeof(rp->key_value));
 	rp->arch = arch;
 	rp->code_base = code_base;
 	rp->version = version;
@@ -342,8 +386,16 @@ rf_interface::set_raw(int on)
 }
 
 void
+rf_interface::set_suota_enable(int on)
+{
+	unsigned char c = (on?1:0);
+	send_packet(PKT_CMD_SET_SUOTA, 1, &c);
+}
+
+void
 rf_interface::reset(void)
 {
+	memset(&current_suota_key[0], 0, sizeof(current_suota_key));
 	send_packet(PKT_CMD_RESET, 0, 0);
 }
 
@@ -378,17 +430,32 @@ rf_interface::send(const unsigned char *mac, const unsigned char *data, int len)
 void
 rf_interface::send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len)
 {
+	unsigned char cmd;
+
 	if (len > 128)
 		return;
-	if (key >= 8)
+	if (key >= 8 && key != suota_key)
 		return;
+	if (key == suota_key) {
+		if (mac) {
+			cmd = PKT_CMD_SEND_PACKET_CRYPT_SUOTA_MAC;
+		} else {
+			cmd = PKT_CMD_SEND_PACKET_CRYPT_SUOTA;
+		}
+	} else {
+		if (mac) {
+			cmd = PKT_CMD_SEND_PACKET_CRYPT_MAC+key;
+		} else {
+			cmd = PKT_CMD_SEND_PACKET_CRYPT+key;
+		}
+	}
 	if (mac) {
 		unsigned char x[8+128];
 		::memcpy(&x[0], mac, 8);
 		::memcpy(&x[8], data, len);
-		send_packet(PKT_CMD_SEND_PACKET_CRYPT_MAC+key, 8+len, &x[0]);
+		send_packet(cmd, 8+len, &x[0]);
 	} else {
-		send_packet(PKT_CMD_SEND_PACKET_CRYPT+key, len, &data[0]);
+		send_packet(cmd, len, &data[0]);
 	}
 }
 
@@ -404,17 +471,22 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 	x[3] = len;
 	sum = (cmd&0xff) + (len&0xff);
 	::write(fd, &x[0], 4);
-for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
+	if (dump_outgoing)
+		for (int i = 0; i < 4; i++)printf("%02x ", x[i]);
 	if (len) {
 		for (int i = 0; i < len; i++)
 			sum += data[i];
 		::write(fd, data, len);
-for (int i = 0; i < len; i++)printf("%02x ", data[i]);
+		if (dump_outgoing)
+			for (int i = 0; i < len; i++)printf("%02x ", data[i]);
 	}
 	x[0] = sum;
 	x[1] = sum>>8;
 	::write(fd, &x[0], 2);
-for (int i = 0; i < 2; i++)printf("%02x ", x[i]);printf("\n");
+	if (dump_outgoing) {
+		for (int i = 0; i < 2; i++)printf("%02x ", x[i]);
+		printf("\n");
+	}
 }
 
 void 
@@ -508,23 +580,29 @@ rf_interface::rf_thread()
 				case PKT_CMD_RCV_PACKET:
 				case PKT_CMD_RCV_PACKET_BROADCAST:
 					if (callback) 
-						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_BROADCAST?1:0, 0, &data[0], &data[8], len-8);
+						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_BROADCAST?1:0, 0, 0, &data[0], &data[8], len-8);
 					goto log;
 				case PKT_CMD_RCV_PACKET_CRYPT:
 				case PKT_CMD_RCV_PACKET_CRYPT_BROADCAST:
-					if (suota_list && ((packet *)&data[8])->type == P_TYPE_SUOTA_REQ) {
-						packet *p = (packet *)&data[8];
+					if (suota_list && ((packet *)&data[9])->type == P_TYPE_SUOTA_REQ) {
+						packet *p = (packet *)&data[9];
 						suota_req *srp = (suota_req*)&p->data[0];
+						unsigned char key = data[0];
 						for (suota_upload *sp = suota_list; sp; sp=sp->next) 
 						if (srp->arch == sp->arch &&
 						    srp->code_base == sp->code_base &&
 						    srp->version[0] == (sp->version&0xff) &&
 						    srp->version[1] == ((sp->version>>8)&0xff)) {
 							unsigned char b[100];
+							int xlen;
 							packet *pp = (packet *)&b[0];
 							suota_resp *rp = (suota_resp *)&pp->data[0];
 							unsigned int offset = srp->offset[0]|(srp->offset[1]<<8);
 							pp->type = P_TYPE_SUOTA_RESP;
+							pp->arch = sp->arch;
+							pp->code_base = sp->code_base;
+							pp->version[0] = sp->version;
+							pp->version[1] = sp->version>>8;
 							rp->arch = sp->arch;
 							rp->code_base = sp->code_base;
 							rp->version[0] = sp->version;
@@ -534,32 +612,37 @@ rf_interface::rf_thread()
 							rp->total_len[0] = sp->len;
 							rp->total_len[1] = sp->len>>8;
 							if (offset < sp->len) {
-								len = sp->len - offset;
-								if (len > 64)
-								    len = 64;
-								memcpy(&rp->data[0], &sp->data[offset], len);
+								xlen = sp->len - offset;
+								if (xlen > 64)
+								    xlen = 64;
+								memcpy(&rp->data[0], &sp->data[offset], xlen);
 							} else {
-								len = 0;
+								xlen = 0;
 							}
-							len += 8;	// resp header
-							len += 10;	// packet header
-							send_crypto(sp->key, &data[0], (unsigned char *)pp, len);
+							//fprintf(stderr, "sending SUOTA resp offset = 0x%x len=%d\n", offset, xlen);
+							xlen += 8;	// resp header
+							xlen += 10;	// packet header
+							pthread_mutex_lock(&suota_mutex);
+							send_suota_key(&sp->key[0]);
+							send_crypto(suota_key, &data[1], (unsigned char *)pp, xlen);
+							pthread_mutex_unlock(&suota_mutex);
+			
 							goto log;
 						}
 						
 					}
 					if (callback) 
-						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST?1:0, 1, &data[0], &data[8], len-8);
+						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST?1:0, 1, data[0], &data[1], &data[9], len-9);
 log:					if (auto_dump) {
-						if (auto_dump) {
-							fprintf(auto_dump, "rf %c %3d %02x%02x%02x%02x:%02x%02x%02x%02x:: ", cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_BROADCAST?'B':' ', len-8, data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7]);  
-							for (int j = 8; j < len; j++) {
-								fprintf(auto_dump, "%02x ", data[j]);
-								if ((j&3) == 3)
-									fprintf(auto_dump, " ");
-							}
-							fprintf(auto_dump, "\n");
+						int o = cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_CRYPT?1:0;
+						int k = (o?data[0]:0);
+						fprintf(auto_dump, "rf %c %d %3d %02x%02x%02x%02x:%02x%02x%02x%02x:: ", cmd == PKT_CMD_RCV_PACKET_CRYPT_BROADCAST||cmd == PKT_CMD_RCV_PACKET_BROADCAST?'B':' ', k, len-8, data[o+0], data[o+1], data[o+2], data[o+3], data[o+4], data[o+5], data[o+6], data[o+7]);  
+						for (int j = 8+o; j < len; j++) {
+							fprintf(auto_dump, "%02x ", data[j]);
+							if ((j&3) == 3)
+								fprintf(auto_dump, " ");
 						}
+						fprintf(auto_dump, "\n");
 					}
 					break;
 				}
@@ -647,6 +730,7 @@ rf_interface::command(const char *cc, const char *file, int line)
 	char *cp = (char *)cc;	// cast to make strol happy
 	int secs, arch, code_base, version, k;
 	unsigned char key[16];
+	unsigned char sk[16];
 	char tmp[100];
 	char c = *cp++;
 	int res = 1;
@@ -680,6 +764,12 @@ rf_interface::command(const char *cc, const char *file, int line)
 		break;
 	case 'a':
 		set_auto_dump(*cp == '-'?0:stderr);
+		break;
+	case 'E':
+		set_suota_enable(*cp == '-'?0:1);
+		break;
+	case 'D':
+		dump_outgoing = *cp == '-'?0:1;
 		break;
 	case 'A':
 		set_auto_dump(*cp == '-'?0:stderr);
@@ -921,13 +1011,66 @@ rf_interface::command(const char *cc, const char *file, int line)
 			break;
 		}
 		while (*cp == ' ' || *cp == '\n')
-		k = strtol(cp, &cp, 0);
-		if (k < 0 || k >= 8) {
-                        fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
-                        res = 0;
-			break;
+			cp++;
+		if (*cp >= '0' && *cp <= '7' && (cp[1] == ' ' || cp[1] == '\t' || !cp[1] || cp[1]=='\n')) {
+			k = strtol(cp, &cp, 0);
+			if (k < 0 || k >= 8) {
+                        	fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
+                        	res = 0;
+				break;
+			}
+		} else {
+			k = suota_key;
+			memset(sk, 0, sizeof(sk));
+			i = 0;
+			for (;;) {
+				if (i == 16 || !*cp || *cp == ' ' || *cp == '\n') {
+					if (i == 0) {
+						res = 0;
+                               			fprintf(stderr, "%s: no key found\n", hdr(file, line, &tmp[0], sizeof(tmp)));
+						break;
+					}
+					break;
+				}
+				if (i != 0 && *cp == ':')
+					cp++;
+				c = *cp++;
+				if (c >= '0' && c <= '9') {
+					sk[i] = (c-'0')<<4;
+				} else
+				if (c >= 'a' && c <= 'f') {
+					sk[i] = (c-'a'+10)<<4;
+				} else
+				if (c >= 'A' && c <= 'F') {
+					sk[i] = (c-'A'+10)<<4;
+				} else {
+					res = 0;
+                               		fprintf(stderr, "%s: bad character found in hex key '%c'\n", hdr(file, line, &tmp[0], sizeof(tmp)), c?c:'?');
+					break;
+				}
+				c = *cp++;
+				if (c >= '0' && c <= '9') {
+					sk[i] |= (c-'0');
+				} else
+				if (c >= 'a' && c <= 'f') {
+					sk[i] |= (c-'a'+10);
+				} else
+				if (c >= 'A' && c <= 'F') {
+					sk[i] |= (c-'A'+10);
+				} else {
+					res = 0;
+                               		fprintf(stderr, "%s: bad character found in hex key '%c'\n", hdr(file, line, &tmp[0], sizeof(tmp)), c?c:'?');
+					break;
+				}
+				i++;
+			}
 		}
 		while (*cp == ' ' || *cp == '\n')
+			cp++;
+		if (!*cp) {
+			send_suota_key(&sk[0]);
+			break;
+		}
 		arch = strtol(cp, &cp, 0);
 		if (arch < 0 || arch >= 256) {
                         fprintf(stderr, "%s: invalid architecture number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
@@ -935,6 +1078,7 @@ rf_interface::command(const char *cc, const char *file, int line)
 			break;
 		}
 		while (*cp == ' ' || *cp == '\n')
+			cp++;
 		code_base = strtol(cp, &cp, 0);
 		if (code_base < 0 || code_base >= 256) {
                         fprintf(stderr, "%s: invalid code_base number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), code_base);
@@ -949,9 +1093,54 @@ rf_interface::command(const char *cc, const char *file, int line)
                         res = 0;
 			break;
 		}
-		send_repeat(secs, k, arch, code_base, version);
+		send_repeat(secs, k, &sk[0], arch, code_base, version);
 		break;
 	case 'u':
+		memset(sk, 0, sizeof(sk));
+		i = 0;
+		for (;;) {
+			if (i == 16 || !*cp || *cp == ' ' || *cp == '\n') {
+				if (i == 0) {
+					res = 0;
+                               		fprintf(stderr, "%s: no key found\n", hdr(file, line, &tmp[0], sizeof(tmp)));
+					break;
+				}
+				break;
+			}
+			if (i != 0 && *cp == ':')
+				cp++;
+			c = *cp++;
+			if (c >= '0' && c <= '9') {
+				sk[i] = (c-'0')<<4;
+			} else
+			if (c >= 'a' && c <= 'f') {
+				sk[i] = (c-'a'+10)<<4;
+			} else
+			if (c >= 'A' && c <= 'F') {
+				sk[i] = (c-'A'+10)<<4;
+			} else {
+				res = 0;
+                               	fprintf(stderr, "%s: bad character found in hex key '%c'\n", hdr(file, line, &tmp[0], sizeof(tmp)), c?c:'?');
+				break;
+			}
+			c = *cp++;
+			if (c >= '0' && c <= '9') {
+				sk[i] |= (c-'0');
+			} else
+			if (c >= 'a' && c <= 'f') {
+				sk[i] |= (c-'a'+10);
+			} else
+			if (c >= 'A' && c <= 'F') {
+				sk[i] |= (c-'A'+10);
+			} else {
+				res = 0;
+                               	fprintf(stderr, "%s: bad character found in hex key '%c'\n", hdr(file, line, &tmp[0], sizeof(tmp)), c?c:'?');
+				break;
+			}
+			i++;
+		}
+		while (*cp == ' ' || *cp == '\n')
+			cp++;
 		arch = strtol(cp, &cp, 0);
 		if (arch < 0 || arch >= 256) {
                         fprintf(stderr, "%s: invalid architecture number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), arch);
@@ -963,14 +1152,6 @@ rf_interface::command(const char *cc, const char *file, int line)
 		code_base = strtol(cp, &cp, 0);
 		if (code_base < 0 || code_base >= 256) {
                         fprintf(stderr, "%s: invalid code_base number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), code_base);
-                        res = 0;
-			break;
-		}
-		while (*cp == ' ' || *cp == '\n')
-			cp++;
-		k = strtol(cp, &cp, 0);
-		if (k < 0 || k >= 8) {
-                        fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
                         res = 0;
 			break;
 		}
@@ -994,7 +1175,7 @@ rf_interface::command(const char *cc, const char *file, int line)
                         res = 0;
 			break;
 		}
-		if (!set_suota_upload(k, arch, code_base, version, cp)) {
+		if (!set_suota_upload(&sk[0], arch, code_base, version, cp)) {
                         fprintf(stderr, "%s: loading file '%s' failed\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp);
                         res = 0;
 		}
@@ -1041,7 +1222,7 @@ hex(FILE *f)
 }
 
 int
-rf_interface::set_suota_upload(int key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
+rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
 {
 	FILE *f = fopen(file, "r");
 	unsigned char hdr[4];
@@ -1077,7 +1258,7 @@ rf_interface::set_suota_upload(int key, unsigned char arch, unsigned char code_b
 	}
 	int t = data[8]|(data[9]<<8);
 	if (version != t) {
-		fprintf(stderr, "file '%s' version tag (%d) does not match request (%d)\n", file, t, version);
+		fprintf(stderr, "file '%s' version tag (%d) does not match request (%ld)\n", file, t, version);
 		free(data);
 		return 0;
 	}
@@ -1088,7 +1269,7 @@ rf_interface::set_suota_upload(int key, unsigned char arch, unsigned char code_b
 	}
 	sp->len = len;
 	sp->data = data;
-	sp->key = key;
+	memcpy(&sp->key[0], key, sizeof(sp->key));
 	sp->arch = arch;
 	sp->base = addr;
 	sp->code_base = code_base;

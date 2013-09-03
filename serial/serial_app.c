@@ -64,23 +64,23 @@ static void tx_intr() __naked
 	push	ACC
 	clr	_UTX0IF
 	mov	a, _tx_count
-	cjne	a, #TX_SIZE, $0901
-
+	cjne	a, #TX_SIZE, $0703
 		clr	_tx_busy
 		anl	_IEN2, #~(1<<2)
 		pop	ACC
 		pop	PSW
-		reti
-$0901:
+		jb	_rcv_busy, $0902
+			anl	_P2, #~1
+$0902:		reti
+$0703:
 	push	_DPS
 	push	dpl
 	push	dph
 	mov	_DPS, #0
 	mov	dpl, _tx_out
 	mov	dph, _tx_out+1
-	inc	a
-	mov	_tx_count, a
-	movx	a, @dptr
+	inc	_tx_count
+$704:	movx	a, @dptr
 	mov	_U0DBUF, a 
 	inc	dptr
 	mov	a, #_tx_buff+TX_SIZE		// if (rx_in == &rx_buff[RX_SIZE]) 
@@ -140,6 +140,7 @@ $0003:
 	inc	_rx_count
 	jb	_rcv_busy, $0005
 		setb	_rcv_busy
+		orl	_P2, #1
 		push	_DPL1
 		push	_DPH1
 	
@@ -168,11 +169,12 @@ $0003:
 $0005:	pop	dph
 	pop	dpl
 	pop	_DPS
-	sjmp	$1101
+	ljmp	$1101
 	__endasm;
 }
 
 unsigned char __pdata rstate=0;
+unsigned char __xdata local_suota_key[16];
 unsigned char __xdata keys[8][16];
 unsigned char __xdata r[256];
 unsigned char __pdata roff;
@@ -217,6 +219,8 @@ static void uart_rcv_thread(task __xdata*t)
 		EA = 0;
 		if (rx_count == 0) {
 			rcv_busy = 0;
+			if (!tx_busy)
+				P2 &= ~1;
 			EA = 1;
 			return;
 		}
@@ -277,6 +281,10 @@ static void uart_rcv_thread(task __xdata*t)
 			case PKT_CMD_SET_KEY:
 				memcpy(&keys[r[0]&7][0], &r[1], 16);
 				break;
+			case PKT_CMD_SET_SUOTA_KEY:
+				memcpy(&local_suota_key[0], &r[0], 16);
+				suota_key_required = 1;
+				break;
 			case PKT_CMD_SET_MAC:
 				rf_set_mac(&r[0]);
 				break;
@@ -292,8 +300,17 @@ static void uart_rcv_thread(task __xdata*t)
 			case PKT_CMD_RESET:
 				reset();
 				break;
+			case PKT_CMD_SET_SUOTA:
+				suota_enabled = (r[0]?1:0);
+				break;
 			case PKT_CMD_SET_RAW:
 				rf_set_raw(r[0]);
+				break;
+			case PKT_CMD_SEND_PACKET_CRYPT_SUOTA:
+				rf_send((packet __xdata*)&r[0], rlen, SUOTA_KEY, 0);
+				break;
+			case PKT_CMD_SEND_PACKET_CRYPT_SUOTA_MAC:
+				rf_send((packet __xdata*)&r[8], rlen-8, SUOTA_KEY, &r[0]);
 				break;
 			default:
 				if (rcmd >= PKT_CMD_SEND_PACKET_CRYPT && rcmd < (PKT_CMD_SEND_PACKET_CRYPT+8)) {
@@ -323,7 +340,7 @@ tx_p(u8 c)
 void
 send_rcv_packet()
 {
-	unsigned int sum = rx_len+8;
+	unsigned int sum = rx_len+(rx_crypto?9:8);
 	unsigned char xl = sum+6;
 	unsigned char c, l;
 	unsigned char  __xdata *d = (u8 * __xdata)rx_packet;
@@ -339,7 +356,13 @@ send_rcv_packet()
 		tx_p(cmd);
 		sum += cmd;
 	}
-	tx_p(rx_len+8);
+	if (rx_crypto) {
+		tx_p(rx_len+9);
+		tx_p(rtx_key);
+		sum += rtx_key;
+	} else {
+		tx_p(rx_len+8);
+	}
 	l = 8;
 	{
 		unsigned char __xdata *mac = rx_mac;
@@ -363,6 +386,7 @@ send_rcv_packet()
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
+		P2 |= 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -382,6 +406,7 @@ ser_putc(char c)
         tx_count--;
         if (!tx_busy) {
                 tx_busy = 1;
+		P2 |= 1;
                 tx_count++;
                 U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -418,6 +443,7 @@ send_printf(char  __code *cp)
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
+		P2 |= 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -454,6 +480,7 @@ send_printf_xdata(char  __xdata *cp)
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
+		P2 |= 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -510,8 +537,8 @@ unsigned int my_app(unsigned char op)
 {
 	switch (op) {
 	case APP_INIT:
-		// something to initialise variables - needs compiler hack
 		uart_setup();
+		suota_key_required = 0;
 		send_printf("Startup\n");
 		P2DIR |= 1;
 		P2 |= 1;
@@ -519,7 +546,10 @@ unsigned int my_app(unsigned char op)
 	case APP_GET_MAC:
 		return 0;
 	case APP_GET_KEY:
-		rf_set_key(&keys[rtx_key][0]);
+		rf_set_key(&keys[rtx_key&0x7][0]);
+		break;
+	case APP_GET_SUOTA_KEY:
+		rf_set_key(&local_suota_key[0]);
 		break;
 	case APP_RCV_PACKET:
 		send_rcv_packet();
@@ -528,10 +558,19 @@ unsigned int my_app(unsigned char op)
 	return 0;
 }
 
-static char __xdata t[256];
+#define TS 250
+static char __xdata t[TS+1];
 __xdata static unsigned char *tc=&t[0];
+__pdata unsigned char ts=TS;
 void pc(char c)
 {
+	if (!ts) {
+		*tc = 0;
+		send_printf_xdata(&t[0]);
+		while (tx_busy);
+		ts = TS;
+	}
+	ts--;
 	*tc++ = c;
 }
 void ps(const char __code *cp)
@@ -541,6 +580,13 @@ void ps(const char __code *cp)
 		c = *cp++;
 		if (!c)
 			return;
+		if (!ts) {
+			*tc = 0;
+			send_printf_xdata(&t[0]);
+			while (tx_busy);
+			ts = TS;
+		}
+		ts--;
 		*tc++ = c;
 	}
 }
@@ -556,6 +602,14 @@ void ph(u8 v)
 {
 	u8 x;
 	char c;
+	
+	if (ts <= 1) {
+		*tc = 0;
+		send_printf_xdata(&t[0]);
+		while (tx_busy);
+		ts = TS;
+	}
+	ts-=2;
 	x =(v>>4)&0xf;
 	if (x < 10) {
 		c = '0'+x;
