@@ -30,10 +30,6 @@ while (<>) {
 	}
 
 # DATA
-#  x_app
-	if (/^ *([0-9A-F][0-9A-F]*) *_x_app .*$/ ) {
-		printf STDOUT "-g _x_app=0x%x\n", hex($1);
-	}
 #  rtx_key
 	if (/^ *([0-9A-F][0-9A-F]*) *_rtx_key .*$/ ) {
 		printf STDOUT "-g _rtx_key=0x%x\n", hex($1);
@@ -221,15 +217,23 @@ while (<>) {
 		printf STDOUT "-g _dma_vect=0x%x\n", hex($1);
 	}
 #  _limit
-	if (/^C:.*([0-9A-F][0-9A-F]*).*l_PSEG.*$/ ) {
+	if (/^C: *([0-9A-F][0-9A-F]*) *l_PSEG.*$/ ) {
 		printf STDOUT "-b PSEG=0x%x\n", hex($1);
 	}
 
 # XDATA
 #  _limit
-	if (/^.*([0-9A-F][0-9A-F]*).*_xseg_end.*$/ ) {
-		printf STDOUT "-b XSEG=0x%x\n", hex($1);
+#	if (/^D: *([0-9A-F][0-9A-F]*) *_xseg_end.*$/ ) {
+#		printf STDOUT "-b XSEG=0x%x\n", hex($1);
+#	}
+	if (/^C: *([0-9A-F][0-9A-F]*) *s_XISEG.*$/ ) {
+		 $a=hex($1);
 	}
+	if (/^C: *([0-9A-F][0-9A-F]*) *l_XISEG.*$/ ) {
+		 $b=hex($1);
+	}
+
 }
+printf STDOUT "-b xSEG=0x%x\n", $a+$b;
 printf STDOUT "-e\n";
 

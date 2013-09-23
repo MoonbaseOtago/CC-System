@@ -24,8 +24,8 @@
 #include "suota.h"
 
 #define RX_DATA_SIZE 128
-static __xdata u8 rx_data0[RX_DATA_SIZE];
-static __xdata u8 rx_data1[RX_DATA_SIZE];
+__xdata u8 rx_data0[RX_DATA_SIZE];
+__xdata u8 rx_data1[RX_DATA_SIZE];
 __bit rx_busy0;
 __bit rx_busy1;
 __bit rx_set;
@@ -37,7 +37,7 @@ packet __xdata  * __data rx_packet;
 u8 __xdata * __data rx_mac;
 static __bit rx_raw=0;
 __xdata static u8 tmp[128+32];
-__xdata static u8 cipher[128];
+__xdata u8 cipher[128];
 __pdata static u8 nonce_tx[16];
 __pdata static u8 nonce_rx[16];
 __pdata static u8 iv[16];
@@ -50,15 +50,19 @@ extern void puthex (unsigned char );
 __xdata __at (0x616A)  u8 IEEE_MAC[8];
 static void aes_done();
 
-static __code unsigned char default_mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
-
 //#define RDEBUG
+#define WDEBUG
 #ifdef RDEBUG
+#ifdef WDEBUG
+unsigned char __pdata pd_PARM_2;
+unsigned char __pdata pdd_PARM_2;
+#else
 extern void ps(const char __code *);
 extern void pf(const char __code *);
 extern void pd(unsigned char __xdata *, u8);
 extern void pdd(unsigned char __pdata *, u8);
 extern void ph(u8);
+#endif
 void x_ps() __naked 
 {
 	__asm;
@@ -72,7 +76,11 @@ void x_ps() __naked
 	push	ar5
 	push	ar6
 	push	ar7
+#ifdef WDEBUG
+	lcall	_putstr
+#else
 	lcall	_ps
+#endif
 	pop	ar7
 	pop	ar6
 	pop	ar5
@@ -99,7 +107,11 @@ void x_pf() __naked
 	push	ar5
 	push	ar6
 	push	ar7
+#ifdef WDEBUG
+	lcall	_putstr
+#else
 	lcall	_pf
+#endif
 	pop	ar7
 	pop	ar6
 	pop	ar5
@@ -126,7 +138,38 @@ void x_pd() __naked
 	push	ar5
 	push	ar6
 	push	ar7
+#ifdef WDEBUG
+	mov	r0, #_pd_PARM_2
+	movx	a, @r0
+	.globl	_x_pdx
+_x_pdx:
+	mov	r7, a
+	push	dpl
+	push	dph
+	mov	dpl, a
+	lcall	_puthex
+	mov	dpl, #' '
+	lcall	_putchar
+	pop	dpl
+	mov	r6, dpl
+	lcall	_puthex
+	pop	dpl
+	mov	r5, dpl
+	lcall	_puthex
+	mov	dpl, #' '
+	lcall	_putchar
+	mov	dph, r6
+1101$:
+		mov	dpl, r5
+		movx	a, @dptr
+		inc	dptr
+		mov	r5, dpl
+		mov	dpl, a
+		lcall	_puthex
+		djnz	r7, 1101$
+#else
 	lcall	_pd
+#endif
 	pop	ar7
 	pop	ar6
 	pop	ar5
@@ -153,6 +196,12 @@ void x_pdd() __naked
 	push	ar5
 	push	ar6
 	push	ar7
+#ifdef WDEBUG
+	mov	dph, #0
+	mov	r0, #_pdd_PARM_2
+	movx	a, @r0
+	sjmp 	_x_pdx
+#else
 	lcall	_pdd
 	pop	ar7
 	pop	ar6
@@ -165,6 +214,7 @@ void x_pdd() __naked
 	pop	_DPH1
 	pop	_DPL1
 	ret
+#endif
 	__endasm;
 }
 void x_ph() __naked 
@@ -180,7 +230,11 @@ void x_ph() __naked
 	push	ar5
 	push	ar6
 	push	ar7
+#ifdef WDEBUG
+	lcall	_puthex
+#else
 	lcall	_ph
+#endif
 	pop	ar7
 	pop	ar6
 	pop	ar5
@@ -213,16 +267,6 @@ rf_set_key(u8 __xdata * key) __naked
     	orl	_ENCCS, #1	//	ENCCS |= 0x01;			// start
 	mov	r0, #16		//	for (i=0; i<16; i++) 
 0002$:		movx	a, @dptr//		ENCDI = *key++;
-#ifdef NOTDEF
-push dpl
-push dph
-push acc
-mov dpl, a
-lcall _puthex
-pop acc
-pop dph
-pop dpl
-#endif
 		inc	dptr
 		mov	_ENCDI, a
 		djnz	r0, 0002$
@@ -245,16 +289,6 @@ rf_set_key_c(u8 __code * key) __naked
 	mov	r0, #16		//	for (i=0; i<16; i++) 
 0002$:		clr	a
 		movc	a, @a+dptr//		ENCDI = *key++;
-#ifdef NOTDEF
-push dpl
-push dph
-push acc
-mov dpl, a
-lcall _puthex
-pop acc
-pop dph
-pop dpl
-#endif
 		inc	dptr
 		mov	_ENCDI, a
 		djnz	r0, 0002$
@@ -265,47 +299,119 @@ pop dpl
 }
 
 void
-rf_set_promiscuous(u8 on)
+rf_set_promiscuous(u8 on) __naked
 {
-    FRMFILT0 = 0x0c|(on?0:1); // filtering on
+	__asm;
+	mov	a, dpl
+	jnz	0001$
+		mov	a, #0xc
+		sjmp	0002$
+0001$:		mov     a, #0xd
+0002$:	mov	dptr, #_FRMFILT0	//	FRMFILT0 = 0x0c|(on?0:1); // filtering on
+	movx	@dptr, a
+	ret
+	__endasm;
 }
 
 void
-rf_set_raw(u8 on)
+rf_set_raw(u8 on) __naked
 {
-    if (on) rx_raw = 1; else rx_raw = 0;
+	__asm;
+    	mov	a, dpl			//	if (on) rx_raw = 1; else rx_raw = 0;
+	jnz	0001$
+		clr	_rx_raw
+		ret
+0001$:	setb	_rx_raw
+	ret
+	__endasm;
 }
 
 void
-rf_set_mac(u8 __xdata *m)
+rf_set_mac(u8 __xdata *m) __naked
 {
-	u8 i;
-	for (i = 0; i < 6; i++)
-		IEEE_MAC[i] = m[i];
-	nonce_tx[7] = IEEE_MAC[6] = m[6];
-	nonce_tx[8] = IEEE_MAC[7] = m[7];
+	__asm;		//	u8 i;
+	mov	r0, #6
+	mov	_DPH1, #_IEEE_MAC>>8
+	mov	_DPL1, #_IEEE_MAC
+0001$:		movx	a, @dptr	//	for (i = 0; i < 6; i++)
+		inc	dptr		//		IEEE_MAC[i] = m[i];
+		inc	_DPS
+		movx	@dptr, a
+		inc	dptr
+		dec	_DPS
+		djnz	r0, 0001$
+	mov	r0, #_nonce_tx+7	//	nonce_tx[7] = IEEE_MAC[6] = m[6];
+	movx    a, @dptr
+	inc     dptr
+	inc	_DPS
+	movx	@dptr, a
+	inc	 dptr
+	dec	_DPS
+	movx	@r0, a
+	inc	r0
+	
+	movx    a, @dptr		//	nonce_tx[8] = IEEE_MAC[7] = m[7];
+	inc	_DPS
+	movx	@dptr, a
+	dec	_DPS
+	movx	@r0, a
+	ret
+	__endasm;
+}
+
+static void
+set_def_mac() __naked
+{
+	__asm;
+	mov	dptr, #_IEEE_MAC
+	inc	_DPS
+	mov	dptr, #14		// we slip 4 bytes into empty space in the int vectors at 14
+	lcall	0002$
+	mov	dptr, #22		// and the other 4 at 22
+	lcall	0002$
+	dec	_DPS
+	ret
+0002$:
+	mov	r0, #4
+0001$:		clr	a
+		movc	a, @a+dptr
+		inc	dptr
+		dec	_DPS
+		movx	@dptr, a
+		inc	dptr
+		inc	_DPS
+		djnz	r0, 0001$
+	ret
+	__endasm;
+}
+
+static void
+clear_nonces() __naked
+{
+	__asm;
+    	mov	r2, #16
+	mov	r0, #_nonce_rx	//	memset(&nonce_rx[0], 0, sizeof(nonce_rx));
+    	mov	r1, #_nonce_tx	//	memset(&nonce_tx[0], 0, sizeof(nonce_tx));
+	clr	a
+0001$:
+		movx	@r1, a
+		movx	@r0, a
+		inc 	r1
+		inc 	r0
+		djnz	r2, 0001$
+	ret
+	__endasm;
 }
 
 void
 rf_init(void)
 {
-    u8 i;
-
     rx_busy0 = 0;
     rx_busy1 = 0;
     rx_set = 0;
     rx_rset = 0;
-    {
-    	u8 __xdata *m = (u8 __xdata*)app(APP_GET_MAC);
-    
-	if (!m) {
-		for (i = 0; i < 8; i++)
-			IEEE_MAC[i] = default_mac[i];
-	} else {
-		for (i = 0; i < 8; i++)
-			IEEE_MAC[i] = *m++;
-    	}
-    }
+    set_def_mac();
+    app(APP_GET_MAC);
     // Enable auto crc
     FRMCTRL0 |= (1<<6);	
 
@@ -323,8 +429,7 @@ rf_init(void)
     RFIRQM0 |= 1<<6;	// RXPKTDONE
     IEN2 |= 1<<0;
 
-    memset(&nonce_rx[0], 0, sizeof(nonce_rx));
-    memset(&nonce_tx[0], 0, sizeof(nonce_tx));
+    clear_nonces();
     nonce_rx[0] = 9;
     nonce_rx[13] = 6;
     nonce_tx[0] = 9;
@@ -341,20 +446,58 @@ rf_init(void)
 
 
 void
-rf_set_channel(u8 channel)
+rf_set_channel(u8 channel)	__naked
 {
-    FREQCTRL = 11+(channel-11)*5;
+	__asm;
+	mov	a, dpl
+    	mov	dptr, #_FREQCTRL 	//	FREQCTRL= 11+(channel-11)*5;
+	add	a, #-11	// 0<=a<=15
+	mov	r0, a
+	rl	a	// 2*a
+	rl	a	// 4*a
+	add	a, r0	// 5*a
+	add	a, #11	// 5*a+11
+	movx	@dptr, a
+	ret
+	__endasm;
 }
 
 void
-rf_set_transmit_power(char power)
+rf_set_transmit_power(char power) __naked
 {
-	switch (power) {
-	case -3:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0x9c; break;
-	case  0:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0xbc; break;
-	case  4:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0xec; break;
-	case 100:	FSCTRL = 0xF5; TXCTRL = 0x74; TXPOWER = 0xfd; break;
-	}
+	//	switch (power) {
+	//	case -3:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0x9c; break;
+	//	case  0:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0xbc; break;
+	//	case  4:	FSCTRL = 0x55; TXCTRL = 0x69; TXPOWER = 0xec; break;
+	//	case 100:	FSCTRL = 0xF5; TXCTRL = 0x74; TXPOWER = 0xfd; break;
+	//	}
+	__asm;
+	mov	r0, #0x55
+	mov	r1, #0x69
+	mov	a, dpl
+	jnz	0001$			// 0
+		mov	a, #0xbc
+		sjmp	0007$
+0001$:	jnb	a.7, 0002$		// -3
+		mov	a, #0x9c
+		sjmp	0007$
+0002$:	jnb	a.6, 0003$		// 4
+		mov	a, #0xec
+		sjmp	0007$
+0003$:					// 100
+		mov	a, #0xfd
+		mov	r0, #0xf5
+		mov	r1, #0x74
+0007$:	mov	dptr, #_TXPOWER
+	movx	@dptr, a
+	mov	dptr, #_FSCTRL
+	mov	a, r0
+	movx	@dptr, a
+	mov	dptr, #_TXCTRL
+	mov	a, r1
+	movx	@dptr, a
+	ret
+	__endasm;
 }
 
 void
@@ -791,13 +934,7 @@ rcv_handler(task __xdata* ppp) __naked
 					lcall	_suota_get_key
 					sjmp	0017$
 0415$:				mov	dpl, #APP_GET_KEY//			app(APP_GET_KEY);
-				mov	a,#0017$
-				push	acc
-				mov	a,#(0017$ >> 8)
-				push	acc
-				push	_x_app
-				push	_x_app+1
-				ret
+				lcall	_app
 0017$:				pop	ar2
 0016$:						//			}
 			mov	r0, #_iv	//			iv[0] = 1;
@@ -1060,12 +1197,13 @@ rcv_handler(task __xdata* ppp) __naked
 				mov	dph, _rx_packet+1//			incoming_suota_packet(rx_packet, rx_len);
 				movx	a, @dptr	//				return;
 				cjne	a, #P_TYPE_SUOTA_REQ, 0036$//		x	}
-					sjmp	0037$	//		}
+					lcall	_incoming_suota_packet_req
+					sjmp	0703$
+							//		}
 0036$:				cjne	a, #P_TYPE_SUOTA_RESP, 0701$
-0037$:					lcall	_incoming_suota_packet
-					mov	a, dpl
-					jnz	0703$
-			sjmp	0701$			//	} else {
+0037$:					lcall	_incoming_suota_packet_resp
+					sjmp	0703$
+						//	} else {
 
 0012$:			clr	_rx_crypto		//		rx_crypto = 0;
 			mov	a, _rx_len		//		rx_len -= hdr
@@ -1081,13 +1219,7 @@ rcv_handler(task __xdata* ppp) __naked
 							//	}
 0701$:
 		mov	dpl, #APP_RCV_PACKET		//	app(APP_RCV_PACKET);
-		mov	a,#0703$
-		push	acc
-		mov	a,#(0703$ >> 8)
-		push	acc
-		push	_x_app
-		push	_x_app+1
-		ret
+		lcall	_app
 0703$:		clr	EA				//done:
 		jnb	_rx_rset, 0704$			//	if (rx_rset) {
 			clr	_rx_busy1		//		rx_busy1 = 0;
@@ -1229,15 +1361,9 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		sjmp	0216$
 0215$:		push	dpl
 		push	dph
-		mov	dpl, #APP_GET_KEY		//	rtx_key = crypto;
 		mov	_rtx_key, a			//	add(get_key);
-		mov	a,#00212$
-		push	acc
-		mov	a,#(00212$ >> 8)
-		push	acc
-		push	_x_app
-		push	(_x_app + 1)
-		ret
+		mov	dpl, #APP_GET_KEY		//	rtx_key = crypto;
+		lcall	_app
 0212$:
 		pop	dph
 		pop	dpl
@@ -1259,24 +1385,41 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 	mov	r5, a		// len
 	jnb	_suota_enabled, 0700$	//	if (suota_enabled) {
 		inc	dptr
-		mov	r0, #_current_code//    	pkt->arch = current_code->arch;
-		movx	a, @r0		//		pkt->code_base = current_code->code_base
-		add	a, #4		//              memcpy(&pkt->version[0], &current_code->version[2], 3);
-		mov	_DPL1, a
-		inc 	r0
-		movx	a, @r0
+		inc	_DPS
+		mov	dptr, #_current_code//    	pkt->arch = current_code->arch;
+		movx	a, @dptr	//		pkt->code_base = current_code->code_base
+		add	a, #6		//              memcpy(&pkt->version[0], &current_code->version[2], 3);
+		mov	r1, a
+		inc	dptr
+		movx	a, @dptr
+		mov	_DPL1, r1
 		addc	a, #0
 		mov	_DPH1, a
 		mov	r2, #4
-0019$:			inc     _DPS    // = #1
-			movx	a, @dptr
+0019$:				       // = #1
+			clr	a
+			movc	a, @a+dptr
 			inc	dptr
 			dec	_DPS	// = #0
 			movx	@dptr, a
 			inc	dptr
+			inc	_DPS
 			djnz	r2, 0019$
-0700$:
-	mov	dptr, #_FSMSTAT1//	while (FSMSTAT1 & ((1<<1) | (1<<5)))	// SFD | TX_ACTIVE
+		dec	_DPS
+//mov dpl, r6
+//mov dph, r7
+//mov	r0, #_pd_PARM_2
+//mov	a, r5
+//movx	@r0, a
+//lcall	_x_pd
+//sjmp 3333$
+//3334$:	.ascii "<-BUFF"
+	//.db	10, 0
+//3333$:
+//mov	dptr, #3334$
+//lcall	_x_pf
+
+0700$:	mov	dptr, #_FSMSTAT1//	while (FSMSTAT1 & ((1<<1) | (1<<5)))	// SFD | TX_ACTIVE
 0017$:		movx	a, @dptr//		;
 		anl	a, #(1<<1)|(1<<5)
 		jnz	0017$

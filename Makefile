@@ -18,7 +18,7 @@
 
 THIS_ARCH = 1		# set this to match the kernel in your board
 THIS_CODE_BASE = 0	# set this to matchy the code base currently running in the board
-THIS_VERSION = 0	# suota version
+THIS_VERSION = 2	# suota version
 
 
 all:	packet_loader kernel.ihx  kernel.lk serial.ihx app.ihx app_even.suota app_odd.suota 
@@ -37,7 +37,7 @@ CFLAGS += -DTHIS_ARCH=$(THIS_ARCH) -DTHIS_CODE_BASE=$(THIS_CODE_BASE) -DTHIS_VER
 CFLAGS += -DKEYS
 LDLIBS_SA = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
 LDLIBS = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l libsdcc -l libint -l liblong -l libfloat
-LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=5 
+LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=6
 LDFLAGS = -muwx -b SSEG=0x80 $(LDLIBS) -M -Y 
 LDEVEN = -b GSINIT0=$(BASE0)
 LDODD  = -b GSINIT0=$(BASE1)
@@ -77,8 +77,8 @@ $(APP_NAME)_even.suota:	$(AOBJ) kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i $(APP_NAME)_even.ihx  $(AOBJ) syms.rel app_hdr.rel
 	./fixcrc -v $(THIS_VERSION) <$(APP_NAME)_even.ihx >$(APP_NAME)_even.suota
 
-$(APP_NAME)_odd.suota:	$(AOBJ) kernel.lk syms.rel $(APP_NAME)_hdr.rel fixcrc
-	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i $(APP_NAME)_odd.ihx  $(AOBJ) syms.rel $(APP_NAME)_hdr.rel
+$(APP_NAME)_odd.suota:	$(AOBJ) kernel.lk syms.rel app_hdr.rel fixcrc
+	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i $(APP_NAME)_odd.ihx  $(AOBJ) syms.rel app_hdr.rel
 	./fixcrc -v $(THIS_VERSION) <$(APP_NAME)_odd.ihx >$(APP_NAME)_odd.suota
 
 #
@@ -204,3 +204,34 @@ test.rel:	test.c
 
 clean:
 	rm -f *.rel *.map *.lst *.ihx *.asm *.mem *.sym *.lk *.rst *.o *.cdb *.adb *.omf packet_loader fixcrc *.suota
+
+
+#
+#	test code for Paul
+#
+
+suota_test:	test2_even.suota test3_odd.suota test4_even.suota test5_odd.suota
+test2_even.suota:	test2.rel kernel.lk syms.rel app_hdr.rel fixcrc
+	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test2.ihx  test2.rel syms.rel app_hdr.rel
+	./fixcrc -v 2 -k ccb17cb57448634ce595c15acf966145 <test2.ihx >test2_even.suota
+test2.rel:	sample_app/app.c  include/interface.h 
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test2.rel -DVV="\"Test 2\n\""
+
+test3_odd.suota:	test3.rel kernel.lk syms.rel app_hdr.rel fixcrc
+	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test3.ihx  test3.rel syms.rel app_hdr.rel
+	./fixcrc -v 3 -k ccb17cb57448634ce595c15acf966145 <test3.ihx >test3_odd.suota
+test3.rel:	sample_app/app.c  include/interface.h 
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test3.rel -DVV="\"Test 3\n\""
+
+test4_even.suota:	test4.rel kernel.lk syms.rel app_hdr.rel fixcrc
+	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test4.ihx  test4.rel syms.rel app_hdr.rel
+	./fixcrc -v 4 -k ccb17cb57448634ce595c15acf966145 <test4.ihx >test4_even.suota
+test4.rel:	sample_app/app.c  include/interface.h 
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test4.rel -DVV="\"Test 4\n\""
+
+test5_odd.suota:	test5.rel kernel.lk syms.rel app_hdr.rel fixcrc
+	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test5.ihx  test5.rel syms.rel app_hdr.rel
+	./fixcrc -v 5 -k ccb17cb57448634ce595c15acf966145 <test5.ihx >test5_odd.suota
+test5.rel:	sample_app/app.c  include/interface.h 
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test5.rel -DVV="\"Test 5\n\""
+

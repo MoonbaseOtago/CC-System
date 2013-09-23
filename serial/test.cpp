@@ -61,14 +61,49 @@ main(int argc, char **argv)
 	const char *tp;
 	char b[256];
 	char *init=0;
+	char *mac=0;
+	char *exp_file=0;
+	int chan=11;
 
 	while (argc >= 2 && argv[1] && argv[1][0] =='-') {
 		switch (argv[1][1]) {
+		case 'x':	//	-x file -c channels_num -m mac 
+			if (argv[1][2]) {
+				exp_file = &argv[1][2];
+			} else
+			if (argc > 2) {
+				argc--;
+				argv++;
+				exp_file = argv[1];
+			}
+			break;
+		case 'c':
+			if (argv[1][2]) {
+				chan = strtoul(&argv[1][2], 0, 0);
+			} else
+			if (argc > 2) {
+				argc--;
+				argv++;
+				chan = strtoul(argv[1], 0, 0);
+			}
+			if (chan < 11 || chan > 26)
+				chan = 11;
+			break;
+		case 'm':
+			if (argv[1][2]) {
+				mac = &argv[1][2];
+			} else
+			if (argc > 2) {
+				argc--;
+				argv++;
+				mac = argv[1];
+			}
+			break;
 		case 'i':
 			if (argv[1][2]) {
 				init = &argv[1][2];
 			} else
-			if (argc > 3) {
+			if (argc > 2) {
 				argc--;
 				argv++;
 				init = argv[1];
@@ -98,6 +133,68 @@ main(int argc, char **argv)
 		exit(99);
 	}
 ok:
+	if (exp_file) {
+		rf_interface::load_info l;
+		rfp->set_channel(chan);
+		if (mac) {
+			unsigned char m[8];
+			char *cp = mac;
+			int i;
+
+			i = 0;
+			for (;;) {
+				char c;
+
+				if (i == 8 || !*cp || *cp == ' ' || *cp == '\n') {
+					if (i == 0) {
+                               			fprintf(stderr, "%s: no valid mac found\n", argv[0], mac);
+						exit(9);
+					}
+					rfp->set_mac(m);
+					break;
+				}
+				if (i != 0 && *cp == ':')
+					cp++;
+				c = *cp++;
+				if (c >= '0' && c <= '9') {
+					m[i] = (c-'0')<<4;
+				} else
+				if (c >= 'a' && c <= 'f') {
+					m[i] = (c-'a'+10)<<4;
+				} else
+				if (c >= 'A' && c <= 'F') {
+					m[i] = (c-'A'+10)<<4;
+				} else {
+                               		fprintf(stderr, "%s: bad character found in hex mac address '%s'\n", argv[0], mac);
+					exit(9);
+				}
+				c = *cp++;
+				if (c >= '0' && c <= '9') {
+					m[i] |= (c-'0');
+				} else
+				if (c >= 'a' && c <= 'f') {
+					m[i] |= (c-'a'+10);
+				} else
+				if (c >= 'A' && c <= 'F') {
+					m[i] |= (c-'A'+10);
+				} else {
+                               		fprintf(stderr, "%s: bad character found in hex mac address '%s'\n", argv[0], mac);
+					exit(9);
+				}
+				i++;
+			}
+		}
+		if (rfp->set_suota_upload(0,0,0,0,exp_file,&l)) {
+			rfp->send_repeat_suota_key(5, &l.key[0], l.arch, l.code_base, l.version);
+			rfp->on();
+			for (;;) {
+				if (rfp->update_sent())
+					break;
+				sleep(1);
+			}
+		}
+		exit(9);
+	} else
 	if (init) {	// non interactive versions
 		rfp->initialise(init);
 		for (;;)

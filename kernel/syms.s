@@ -16,7 +16,6 @@
 ; License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 ;
 
-	.globl	_x_app
 	.globl	_rx_len
 	.globl	_rx_packet
 	.globl	_rx_mac
@@ -63,8 +62,6 @@
 	.globl	_system_attributes
 	.globl	_keys_on
 	.area CSEG    (CODE)
-	.globl	__1
-__1=_x_app
 	.globl	__2
 __2=_rx_len
 	.globl	__3

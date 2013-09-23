@@ -180,6 +180,7 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 	callback = rcv_callback;
 	shutdown = 0;
 	auto_dump = 0;
+	sent = 0;
 	dump_outgoing = 0;
 	repeat_list = 0;
 	pthread_mutex_init(&mutex, 0);
@@ -619,9 +620,11 @@ rf_interface::rf_thread()
 							} else {
 								xlen = 0;
 							}
+							if ((offset+xlen) >= sp->len)
+								sent = 1;
 							//fprintf(stderr, "sending SUOTA resp offset = 0x%x len=%d\n", offset, xlen);
 							xlen += 8;	// resp header
-							xlen += 10;	// packet header
+							xlen += 5;	// packet header
 							pthread_mutex_lock(&suota_mutex);
 							send_suota_key(&sp->key[0]);
 							send_crypto(suota_key, &data[1], (unsigned char *)pp, xlen);
@@ -1096,8 +1099,12 @@ rf_interface::command(const char *cc, const char *file, int line)
 		send_repeat(secs, k, &sk[0], arch, code_base, version);
 		break;
 	case 'u':
+		k = 1;
 		memset(sk, 0, sizeof(sk));
 		i = 0;
+		if (*cp == '*') {
+			k = 0;
+		} else
 		for (;;) {
 			if (i == 16 || !*cp || *cp == ' ' || *cp == '\n') {
 				if (i == 0) {
@@ -1175,7 +1182,7 @@ rf_interface::command(const char *cc, const char *file, int line)
                         res = 0;
 			break;
 		}
-		if (!set_suota_upload(&sk[0], arch, code_base, version, cp)) {
+		if (!set_suota_upload((k?&sk[0]:0), arch, code_base, version, cp)) {
                         fprintf(stderr, "%s: loading file '%s' failed\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp);
                         res = 0;
 		}
@@ -1221,15 +1228,21 @@ hex(FILE *f)
         return r;
 }
 
+
 int
-rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file)
+rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file, load_info *out)
 {
 	FILE *f = fopen(file, "r");
 	unsigned char hdr[4];
+	unsigned char k[16];
 	if (!f)
 		return 0;
 	
 	if (fread(&hdr[0], 1, 4, f) != 4) {
+		fclose(f);
+		return 0;
+	}
+	if (fread(&k[0], 1, 16, f) != 16) {
 		fclose(f);
 		return 0;
 	}
@@ -1246,21 +1259,36 @@ rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned 
 		return 0;
 	}
 	fclose(f);
+	if (!key) {
+		arch = data[6];
+	} else
 	if (arch != data[6]) {
 		fprintf(stderr, "file '%s' architecture tag (%d) does not match request (%d)\n", file, data[6], arch);
 		free(data);
 		return 0;
 	}
+	if (!key) {
+		code_base = data[7];
+	} else
 	if (code_base != data[7]) {
 		fprintf(stderr, "file '%s' code_base tag (%d) does not match request (%d)\n", file, data[7], code_base);
 		free(data);
 		return 0;
 	}
 	int t = data[8]|(data[9]<<8);
+	if (!key) {
+		version = t;
+	} else
 	if (version != t) {
 		fprintf(stderr, "file '%s' version tag (%d) does not match request (%ld)\n", file, t, version);
 		free(data);
 		return 0;
+	}
+	if (out) {
+		memcpy(&out->key[0], &k[0], sizeof(out->key));
+		out->arch = arch;
+		out->code_base = code_base;
+		out->version = version;
 	}
 	suota_upload *sp = (suota_upload *)malloc(sizeof(*sp));
 	if (!sp) {
@@ -1269,7 +1297,11 @@ rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned 
 	}
 	sp->len = len;
 	sp->data = data;
-	memcpy(&sp->key[0], key, sizeof(sp->key));
+	if (key) {
+		memcpy(&sp->key[0], key, sizeof(sp->key));
+	} else {
+		memcpy(&sp->key[0], &k[0], sizeof(sp->key));
+	}
 	sp->arch = arch;
 	sp->base = addr;
 	sp->code_base = code_base;

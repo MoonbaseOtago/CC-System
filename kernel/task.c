@@ -48,6 +48,16 @@ iretx() __naked
 	reti
 	__endasm;
 }
+
+u8 app(u8 v) __naked
+{
+	__asm;
+	push	_x_app
+	push	_x_app+1
+	ret
+	__endasm;
+}
+
 static u8 __data isr_save0;
 static u8 __data isr_save1;
 extern void sleep();
@@ -405,6 +415,24 @@ void dump_wait_list(char __code *cp) __naked
 	mov	_U0DBUF, #','	
 0035$:	mov	a, _U0CSR
 	jb	_ACC_0, 0035$
+
+//	pop 	dph
+//	pop	dpl
+//	push	dpl
+//	push	dph
+//	movx	a, @dptr
+//	push	acc
+//	inc	dptr
+//	movx	a, @dptr	
+//	mov	dpl, a
+//	lcall	_puthex
+//	pop	dpl
+//	lcall	_puthex
+//
+//	mov	_U0DBUF, #','	
+//0135$:	mov	a, _U0CSR
+//	jb	_ACC_0, 0135$
+
 	pop 	dph
 	pop	dpl
 	inc	dptr
@@ -436,7 +464,7 @@ void dump_wait_list(char __code *cp) __naked
 	movx	a, @dptr
 	mov	dph, a
 	pop	dpl
-	sjmp	0001$
+	ljmp	0001$
 	__endasm;
 #endif
 }
@@ -491,6 +519,11 @@ queue_task(task __xdata * t, unsigned int time) __naked
 	push	dph
 	push	dpl
 	push	dph
+movx a, @dptr
+push acc
+inc dptr
+movx a, @dptr
+push acc
 sjmp 0101$
 0102$:	.ascii	"queue "
 	.db	0
@@ -498,6 +531,10 @@ sjmp 0101$
 	.db	0
 0101$:	mov	dptr, #0102$
 	lcall	_putstr
+	pop	dpl
+	lcall	_puthex
+	pop	dpl
+	lcall	_puthex
 	pop	dpl
 	lcall	_puthex
 	pop	dpl
@@ -1132,9 +1169,19 @@ main()
 		x_app = (unsigned int (* __data ) (u8))(&CODE_HEADER.data[0]);
 	}
 #endif
+#ifdef TDEBUG
+	uart_init();
+	putstr("calling suota_setup ...\n");
+#endif
 	suota_setup();
 	rf_init();
-	(*x_app)(APP_INIT);
+#ifdef TDEBUG
+	putstr("calling APP_INIT ...\n");
+#endif
+	app(APP_INIT);
+#ifdef TDEBUG
+	putstr("return APP_INIT ...\n");
+#endif
 #ifdef XMT
 	queue_task(&test_task4,  1*HZ);
 #endif
@@ -1144,6 +1191,8 @@ main()
 	queue_task(&test_task3, 3*HZ);
 #endif
 	__asm;
+	.globl	_restart_point
+_restart_point:
 	mov	r6, #0		//	delta = 0;
 	mov	r7, #0	
 m_1:				//  for (;;) {
@@ -1223,7 +1272,7 @@ m_4:					// for (;;) {
 		movx 	a, @dptr
 		cjne	a, #0, m_8
 #ifdef TDEBUG
-		acall	xlog1
+		lcall	xlog1
 #endif
 		push 	dpl
 		push 	dph
@@ -1301,6 +1350,16 @@ m_8a:
 
 
 m_10:					//	} else {
+#ifdef TDEBUG
+//        mov     a, _ST0
+//	push	_ST1
+ //       mov     dpl, _ST2
+//	lcall _puthex
+//	pop	dpl
+//	lcall _puthex
+
+//		lcall	xlog5
+#endif
 			mov	dpl, _waitq
 			mov	dph, _waitq+1
 			inc	dptr
@@ -1313,26 +1372,43 @@ m_10:					//	} else {
 			cjne	r0, #0, m_11
 				mov	r6, #0	//		delta = 0;
 				mov	r7, #0
-				ajmp	m_1
+				ljmp	m_1
 m_11:						//	} else {
 				mov	_enter_sleep_mod_flag, #1	// enter_sleep_mod_flag = 1;
 				mov	dpl, r0
 				mov	dph, a
-				acall 	_start_timer	// 	start_timer(xpt->time);
+				lcall 	_start_timer	// 	start_timer(xpt->time);
 				mov	_SLEEPCMD, #4 //	SLEEPCMD = 4;//(radio_busy?0:2);
 				setb	EA		//      EA = 1;
 m_11b:				mov 	a, _enter_sleep_mod_flag
 				cjne	a, #1, m_11a    //      while(enter_sleep_mod_flag) 
-					acall	_sleep	//		sleep();
+					lcall	_sleep	//		sleep();
 					sjmp	m_11b
 m_11a:				clr	EA	//		EA = 0;
-				acall	_stop_timer	//	delta = stop_timer();
+				lcall	_stop_timer	//	delta = stop_timer();
 				mov	r6, dpl
 				mov	r7, dph
-				ajmp	m_1		//  }
+//       mov     a, _ST0
+//	push	_ST1
+//      mov     dpl, _ST2
+//	lcall _puthex
+//	pop	dpl
+//	lcall _puthex
+//	mov	dpl, r7
+//	lcall _puthex
+//	mov	dpl, r6
+//	lcall _puthex
+//	mov	dpl, _last+1
+//	lcall _puthex
+//	mov	dpl, _last
+//	lcall _puthex
+//	mov	dptr,#317$
+//	lcall	_putstr
+				ljmp	m_1		//  }
 							// }
 							//}
 #ifdef TDEBUG
+0317$:	.db 0x0a, 0
 xlog1:
 	push	dpl
 	push	dph
@@ -1372,5 +1448,19 @@ xlog5:
 0312$:	.ascii	"sleeping "
 0313$:	.db 0x0a, 0
 #endif
+	__endasm;
+}
+
+void
+task_restart() __naked
+{
+	__asm;
+	clr	a
+	mov	_waitq, a
+	mov	_waitq+1, a
+	mov	_enter_sleep_mod_flag, a
+	mov	sp, #0x80
+	setb	_EA
+	ljmp	_restart_point
 	__endasm;
 }

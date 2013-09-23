@@ -41,5 +41,6 @@ void cancel_task(task __xdata * );
 #define TASK_QUEUED	2
 
 extern void wait_us(u8);
+extern u8 app(u8);
 
 #endif

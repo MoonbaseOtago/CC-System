@@ -60,9 +60,29 @@ _CODE_HEADER:
 		djnz	r1, 0010$
 		djnz	r2, 0010$
 0011$:
-	// compiler generated variable initialisations will be inserted here
-	.area GSFINAL    (CODE)
-	ret
+        mov     r1, #l_XINIT
+        mov     a, r1
+        orl     a, #(l_XINIT >> 8)
+        jz      0023$
+        	mov     r2, #((l_XINIT+255) >> 8)
+        	mov     _DPS, #0x01
+        	mov     dptr, #s_XINIT
+        	dec     _DPS         
+        	mov     dptr, #s_XISEG
+0021$:			clr     a
+        		inc     _DPS         
+        		movc    a, @a+dptr
+        		inc     dptr
+        		dec     _DPS        
+        		movx    @dptr, a
+        		inc     dptr
+        		djnz    r1, 0021$
+        		djnz    r2, 0021$
+0023$:	ret
+	.area XSEG    (XDATA)
+	.globl	_xseg_end
+_xseg_end:
+	.ds	1
 	__endasm;
 }
 

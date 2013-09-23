@@ -26,6 +26,9 @@ __code unsigned char ckey[] = {0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,	/
 __xdata unsigned char test[] = {1,2,3,4,5,6};
 
 
+static void suota_broadcast(task __xdata * t);
+__xdata task suota_broadcast_task = {suota_broadcast,0,0,0};
+
 __data u8 led_ind=0;
 __xdata u8 leds[6];
 
@@ -35,18 +38,32 @@ __pdata u8 uniq_index;
 unsigned int my_app(unsigned char op) 
 {
 	switch (op) {
+	case APP_SUOTA_DONE:
+		// do whatever you need to do to recover state then fall thru into APP_INIT
 	case APP_INIT:
 		uart_init();
-		putstr("Hello World\r\n");
+#ifdef VV
+		putstr(VV);
+#else
+		putstr("Hello World 2\r\n");
+#endif
 		leds_off();
 		// keys_on();	// call to enable key scanning (messes with uart)
 		rf_set_channel(11);
 		//rf_send((packet __xdata*)&test[0], 6, 0, 0);
+		suota_allow_any_code = 0;	// use to allow any code_base to upgrade
 		suota_key_required = 0;		// enable per-app download key if defined
 		suota_enabled = 1;		// enable SUOTA
+		queue_task(&suota_broadcast_task, 10);// since we're participating in suota we must
+						// advertise what we have available - if we're not
+						// broadcasting something else regularly
+						// we need to set up a regular null broadcast
+						// the rf subsystem will fill in all the interesting
+						// bits in the packet header
 		break;
 	case APP_GET_MAC:
-		return (unsigned int)&mac[0];
+		//rf_set_mac(&mac[0]);		// do this to set the mac
+		return 0;			
 	case APP_GET_KEY:
 		rf_set_key_c(&ckey[0]);
 		return 0;
@@ -57,6 +74,7 @@ unsigned int my_app(unsigned char op)
 		//
 		// for playa broadcast protocol first 3 bytes are of type broadcast_filter
 		//
+#ifdef NOTDEF
 		if (rx_len < 3)
 			return;
 		if (rx_packet->data[0] > 0) {	// forward  packets
@@ -86,6 +104,7 @@ unsigned int my_app(unsigned char op)
 			if (uniq_index >= (MAX_UNIQ*2))
 				uniq_index = 0;
 		}
+#endif
 		// do something interesting here
 		break;
 	case APP_WAKE:
@@ -138,7 +157,25 @@ unsigned int my_app(unsigned char op)
 			putstr(" released\n");
 		}
 		break;
+	case APP_SUOTA_START:
+		return 0;	// 2 LSB:	0 means reboot after SUOTA
+				// 		1 means no reboot, call init again
+				// 		2 means no reboot, data has been saved call with APP_SUOTA_DONE to recover
+				// if bit 2 is set the first 1k of the old code will be erased before
+				//		control is passed to the new code - put your keys there
 	}
 	return 0;
 }
 
+static __xdata packet suota_packet;
+static void
+suota_broadcast(task __xdata * t)
+{
+	suota_packet.type = P_TYPE_NOP;
+	suota_packet.arch = 0x12;
+	suota_packet.code_base = 0x34;
+	suota_packet.version[0] = 0x56;
+	suota_packet.version[1] = 0x78;
+	rf_send(&suota_packet, sizeof(suota_packet), SUOTA_KEY, 0);	// any key they will accept will do
+	queue_task(&suota_broadcast_task, 10*HZ);
+}

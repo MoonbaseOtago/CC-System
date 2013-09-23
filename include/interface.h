@@ -26,7 +26,6 @@
 #include "suota.h"
 
 extern unsigned int (* __data x_app) (u8 v);
-#define app (*x_app)
 #define APP_INIT		0
 #define APP_GET_MAC 		1
 #define APP_GET_KEY 		2
@@ -40,14 +39,20 @@ __bit __at (0x01) rx_broadcast;
 extern u8 __xdata * __data rx_mac;
 #define APP_WAKE		5
 #define APP_KEY			6
+#define APP_SUOTA_START		7
+#define	APP_SUOTA_DONE		8
 extern u8 __pdata key;
 __bit __at (0x02) key_down;
 __bit __at (0x03) suota_key_required;
 __bit __at (0x04) suota_enabled;
+__bit __at (0x05) suota_allow_any_code;
 #define		KEY_X		0
 #define		KEY_O		1
 #define		KEY_LEFT	2
 #define		KEY_RIGHT	3
+unsigned char __xdata *suota_allocate_save_space(u8 v);
+unsigned char suota_get_save_size();
+unsigned char __xdata *suota_get_save_space();
 
 // call backs
 extern void leds_rgb(unsigned char * __xdata);

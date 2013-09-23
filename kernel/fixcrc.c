@@ -152,6 +152,7 @@ int
 main(int argc, char **argv)
 {
 	unsigned char h[4];
+	unsigned char k[16];
 	int len;
 	unsigned long c;
 	int version = -1;
@@ -161,6 +162,47 @@ main(int argc, char **argv)
 		if (strcmp(argv[i], "-v") == 0 && i < argc) {
 			i++;
 			version = strtol(argv[i], 0, 0);
+		} else 
+		if (strcmp(argv[i], "-k") == 0 && i < argc) {
+			char *cp;
+			i++;
+			cp = argv[i];
+			for (i = 0; i < 16; i++) {
+				int v;
+
+				if (*cp >= '0' && *cp <= '9') {
+					v = (*cp-'0');
+				} else
+				if (*cp >= 'a' && *cp <= 'f') {
+					v = (*cp-'a')+10;
+				} else
+				if (*cp >= 'A' && *cp <= 'F') {
+					v = (*cp-'A')+10;
+				} else {
+					fprintf(stderr, "%s: bad key '%s'\n", argv[0], argv[i]);
+					exit(9);
+				}
+				cp++;
+				v = v<<4;
+				if (*cp >= '0' && *cp <= '9') {
+					v |= (*cp-'0');
+				} else
+				if (*cp >= 'a' && *cp <= 'f') {
+					v |= (*cp-'a')+10;
+				} else
+				if (*cp >= 'A' && *cp <= 'F') {
+					v |= (*cp-'A')+10;
+				} else {
+					fprintf(stderr, "%s: bad key '%s'\n", argv[0], argv[i]);
+					exit(9);
+				}
+				cp++;
+				k[i] = v;
+			}
+			if (*cp) {
+				fprintf(stderr, "%s: bad key '%s' - too long\n", argv[0], argv[i]);
+				exit(9);
+			}
 		} else {
 			fprintf(stderr, "%s: unknown flag '%s'\n", argv[0], argv[i]);
 			exit(9);
@@ -187,6 +229,7 @@ main(int argc, char **argv)
 	h[2] = len;	// len
 	h[3] = len>>8;
 	fwrite(&h[0], 4, 1, stdout);
+	fwrite(&k[0], 16, 1, stdout);
 	fwrite(&m[mn], len, 1, stdout);
 	return 0;
 }

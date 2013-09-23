@@ -146,7 +146,14 @@ public:
 	int command(const char *cmd) { return command(cmd, 0, 0); }
 	void send_repeat(int secs, int key, unsigned char arch, unsigned char code_base, unsigned long version);
 	void send_repeat_suota_key(int secs, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version);
-	int set_suota_upload(unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
+	typedef struct load_info {
+		unsigned char	arch;
+		unsigned char	code_base;
+		unsigned short	version;
+		unsigned char	key[16];
+	} load_info;
+	int set_suota_upload(unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file, load_info *kout=0);
+	bool	update_sent() { return sent; }
 private:
 	void	send_suota_key(unsigned char * key);
 	void	set_suota_enable(int on);
@@ -163,6 +170,7 @@ private:
 	pthread_mutex_t	suota_mutex;
 	pthread_cond_t	cond;
 	pthread_t	tid;
+	bool	sent;
 	static const unsigned char suota_key = 0xfe;
 	unsigned char current_suota_key[16];
 	int command(const char *cmd, const char *file, int line);

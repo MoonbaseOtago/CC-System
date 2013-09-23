@@ -169,12 +169,11 @@ get out, as fast as you can - these calls are made from task callout routines:
 			return 0;	// return ignored
 		case APP_GET_MAC:
 			//
-			//	return the address of the 8 byte mac address to use for
-			//	this board - if you return NULL it will use the default 
-			//	address programmed into the board at manufacture
-			//	(can be overridden with rf_set_mac()
+			//	set the mac address here if you want to use something other than
+			//	the default, otherwise do nothing
 			//
-			return (void *)&mac;
+			rf_set_mac(&mac[0]);	
+			return 0;
 		case APP_GET_KEY:
 			extern u8 __data rtx_key;
 			//

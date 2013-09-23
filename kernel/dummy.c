@@ -24,11 +24,12 @@ static void xxxx() __naked {
 	.globl	_CODE_HEADER
 _CODE_HEADER:
 	.db	0, 0, 0, 0	// CRC will go here
-	.db	0, 0		// len from arch to end of code 
+	.db	0, 0		// len from arch to end of code - must be 0
 	.db	THIS_ARCH
 	.db	THIS_CODE_BASE
 	.db	0, 0		// version (little endian)
-	mov	dpl, #0
+	clr	a
+	mov	dpl, a
 	ret
 	.area DSEG    (DATA)
 	.globl	_data_end

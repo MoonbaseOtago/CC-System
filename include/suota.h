@@ -36,7 +36,8 @@ typedef struct suota_resp {
 } suota_resp;
 
 #ifndef __cplusplus
-void incoming_suota_packet();
+void incoming_suota_packet_req();
+void incoming_suota_packet_resp();
 u8 incoming_suota_version();
 void suota_setup();
 void suota_get_key();

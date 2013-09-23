@@ -29,6 +29,10 @@ _CODE_HEADER:
 	.db	0, 0		// version (little endian)
 	.globl	_my_app
 	ljmp	_my_app
+	.area XSEG    (XDATA)
+	.globl	_xseg_end
+_xseg_end:
+	.ds	1
 	__endasm;
 }
 
