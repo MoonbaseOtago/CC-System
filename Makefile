@@ -19,7 +19,9 @@
 THIS_ARCH = 1		# set this to match the kernel in your board
 THIS_CODE_BASE = 0	# set this to matchy the code base currently running in the board
 THIS_VERSION = 2	# suota version
-
+# DRV_KEYS = 1		# define for key driver
+# DRV_LEDS = 1		# define for leds driver
+# DRV_DAYLIGHT = 1	# define for daylight detector driver
 
 all:	packet_loader kernel.ihx  kernel.lk serial.ihx app.ihx app_even.suota app_odd.suota 
 
@@ -34,7 +36,15 @@ BASE1 = 0x5000
 
 CFLAGS = -mmcs51 --model-medium --opt-code-size --debug -Iinclude -DBASE0=$(BASE0) -DBASE1=$(BASE1)
 CFLAGS += -DTHIS_ARCH=$(THIS_ARCH) -DTHIS_CODE_BASE=$(THIS_CODE_BASE) -DTHIS_VERSION=$(THIS_VERSION)
-CFLAGS += -DKEYS
+ifdef DRV_KEYS
+CFLAGS += -DDRV_KEYS
+endif
+ifdef DRV_LEDS
+CFLAGS += -DDRV_LEDS
+endif
+ifdef DRV_DAYLIGHT
+CFLAGS += -DDRV_DAYLIGHT
+endif
 LDLIBS_SA = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
 LDLIBS = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l libsdcc -l libint -l liblong -l libfloat
 LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=6
@@ -45,7 +55,13 @@ LDODD  = -b GSINIT0=$(BASE1)
 APP_NAME=app
 
 # kernel objects
-KOBJ = task.rel suota.rel rf.rel leds.rel keys.rel suota_key.rel
+KOBJ = task.rel suota.rel rf.rel suota_key.rel
+ifdef DRV_LEDS
+KOBJ += leds.rel
+endif
+ifdef DRV_KEYS
+KOBJ += keys.rel
+endif
 
 CFLAGS += -DAPP        
 AOBJ = $(APP_NAME).rel
@@ -139,8 +155,8 @@ leds.rel:	kernel/leds.s
 #		is solely to avoid a bug in sdcc's linker which complains if you have a -g
 #		directive to declare a global variable but never use it
 #
-syms.rel:	kernel/syms.s  
-	$(AS)   -z -l -o syms.rel kernel/syms.s
+syms.rel:	kernel/syms.c  
+	$(CC) $(CFLAGS) -c kernel/syms.c
 
 #
 #	code header for unified build

@@ -1,21 +1,24 @@
-; (c) Copyright Paul Campbell paul@taniwha.com 2013
-; 
-; This library is free software; you can redistribute it and/or
-; modify it under the terms of the GNU Lesser General Public
-; License as published by the Free Software Foundation; either
-; version 2.1 of the License, or (at your option) version 3, or any
-; later version accepted by Paul Campbell , who shall
-; act as a proxy defined in Section 6 of version 3 of the license.
-; 
-; This library is distributed in the hope that it will be useful,
-; but WITHOUT ANY WARRANTY; without even the implied warranty of
-; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-; Lesser General Public License for more details.
-; 
-; You should have received a copy of the GNU Lesser General Public 
-; License along with this library.  If not, see <http://www.gnu.org/licenses/>.
-;
+// (c) Copyright Paul Campbell paul@taniwha.com 2013
+// 
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) version 3, or any
+// later version accepted by Paul Campbell , who shall
+// act as a proxy defined in Section 6 of version 3 of the license.
+// 
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+// 
+// You should have received a copy of the GNU Lesser General Public 
+// License along with this library.  If not, see <http://www.gnu.org/licenses/>.
+//
 
+void ____x___() __naked
+{
+	__asm;
 	.globl	_rx_len
 	.globl	_rx_packet
 	.globl	_rx_mac
@@ -37,8 +40,12 @@
 	.globl	_rf_send_PARM_2
 	.globl	_rf_send_PARM_3
 	.globl	_rf_send_PARM_4
+#ifdef DRV_KEYS
 	.globl	_key
+#endif
+#ifdef DRV_DAYLIGHT
 	.globl	_daylight
+#endif
 	.globl	_putchar
 	.globl	_putstr
 	.globl	_puthex
@@ -56,11 +63,17 @@
 	.globl	_rf_receive_on
 	.globl	_rf_receive_off
 	.globl	_rf_send
+#ifdef DRV_LEDS
 	.globl	_leds_off
 	.globl	_leds_rgb
+#endif
+#ifdef DRV_KEYS
 	.globl	_keys_off
+#endif
 	.globl	_system_attributes
+#ifdef DRV_KEYS
 	.globl	_keys_on
+#endif
 	.area CSEG    (CODE)
 	.globl	__2
 __2=_rx_len
@@ -104,10 +117,14 @@ __20=_rf_send_PARM_2
 __21=_rf_send_PARM_3
 	.globl	__22
 __22=_rf_send_PARM_4
+#ifdef DRV_KEYS
 	.globl	__23
 __23=_key
+#endif
+#ifdef DRV_DAYLIGHT
 	.globl	__24
 __24=_daylight
+#endif
 	.globl	__25
 __25=_putchar
 	.globl	__26
@@ -140,16 +157,22 @@ __38=_rf_receive_on
 __39=_rf_receive_off
 	.globl	__40
 __40=_rf_send
+#ifdef DRV_LEDS
 	.globl	__41
 __41=_leds_off
 	.globl	__42
 __42=_leds_rgb
+#endif
+#ifdef DRV_KEYS
 	.globl	__43
 __43=_keys_off
 	.globl	__44
 __44=_keys_on
 	.globl	__45
+#endif
 __45=_system_attributes
 	.globl	__46
 __46=_rf_set_key_c
 	.globl	__33
+	__endasm;
+}

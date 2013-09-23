@@ -63,7 +63,7 @@ static u8 __data isr_save1;
 extern void sleep();
 //extern void rf_err_isr()  __interrupt(0);
 extern void rf_isr()  __interrupt(16);
-#ifdef KEYS
+#ifdef DRV_KEYS
 extern void t1_isr()  __interrupt(9);
 extern void keys_on();
 #else
@@ -205,6 +205,7 @@ void dma_isr()  __interrupt(8) __naked
 	__endasm;
 }
 
+#ifdef DRV_DAYLIGHT
 unsigned char
 daylight() __naked
 {
@@ -217,6 +218,7 @@ daylight() __naked
 	ret
 	__endasm;
 }
+#endif
 
 static void
 xxxx_sleep() __naked

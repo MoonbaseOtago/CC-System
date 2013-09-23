@@ -47,8 +47,12 @@ unsigned int my_app(unsigned char op)
 #else
 		putstr("Hello World 2\r\n");
 #endif
+#ifdef DRV_LEDS
 		leds_off();
-		// keys_on();	// call to enable key scanning (messes with uart)
+#endif
+#ifdef DRV_KEYS
+		keys_on();	// call to enable key scanning (messes with uart)
+#endif
 		rf_set_channel(11);
 		//rf_send((packet __xdata*)&test[0], 6, 0, 0);
 		suota_allow_any_code = 0;	// use to allow any code_base to upgrade
@@ -109,6 +113,7 @@ unsigned int my_app(unsigned char op)
 		break;
 	case APP_WAKE:
 		break;
+#ifdef DRV_KEYS
 	case APP_KEY:
 		switch (key) {
 		case KEY_O:
@@ -132,7 +137,9 @@ unsigned int my_app(unsigned char op)
 					leds[led_ind] = 0;
 					leds[led_ind+1] = 0;
 				}
+#ifdef DRV_LEDS
 				leds_rgb(&leds[0]);
+#endif
 			}
 			break;
 		case KEY_RIGHT:
@@ -145,7 +152,9 @@ unsigned int my_app(unsigned char op)
 					leds[led_ind] = 0xff;
 					leds[led_ind+1] = 0xff;
 				}
+#ifdef DRV_LEDS
 				leds_rgb(&leds[0]);
+#endif
 			}
 			break;
 		default:
@@ -157,6 +166,7 @@ unsigned int my_app(unsigned char op)
 			putstr(" released\n");
 		}
 		break;
+#endif
 	case APP_SUOTA_START:
 		return 0;	// 2 LSB:	0 means reboot after SUOTA
 				// 		1 means no reboot, call init again

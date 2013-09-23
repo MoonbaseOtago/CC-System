@@ -41,8 +41,6 @@ extern u8 __xdata * __data rx_mac;
 #define APP_KEY			6
 #define APP_SUOTA_START		7
 #define	APP_SUOTA_DONE		8
-extern u8 __pdata key;
-__bit __at (0x02) key_down;
 __bit __at (0x03) suota_key_required;
 __bit __at (0x04) suota_enabled;
 __bit __at (0x05) suota_allow_any_code;
@@ -55,8 +53,10 @@ unsigned char suota_get_save_size();
 unsigned char __xdata *suota_get_save_space();
 
 // call backs
+#ifdef DRV_LEDS
 extern void leds_rgb(unsigned char * __xdata);
 extern void leds_off();
+#endif
 extern void rf_receive_on(void);
 extern void rf_receive_off(void);
 extern void rf_set_channel(u8 channel);
@@ -75,9 +75,15 @@ extern void rf_set_transmit_power(char power);
 extern void rf_set_promiscuous(u8 on);
 extern void rf_set_raw(u8 on);
 
+#ifdef DRV_DAYLIGHT
 extern unsigned char daylight(void);
+#endif
+#ifdef DRV_KEYS
+__bit __at (0x02) key_down;
+extern u8 __pdata key;
 extern void keys_on();
 extern void keys_off();
+#endif
 extern void uart_init();
 extern void putchar(char c);
 extern void putstr(char __code *cp);
