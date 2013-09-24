@@ -53,6 +53,9 @@ unsigned int my_app(unsigned char op)
 #ifdef DRV_KEYS
 		keys_on();	// call to enable key scanning (messes with uart)
 #endif
+		
+		// pinMode(P(1,2), OUTPUT);
+		// digitalWrite(P(1,2), HIGH);
 		rf_set_channel(11);
 		//rf_send((packet __xdata*)&test[0], 6, 0, 0);
 		suota_allow_any_code = 0;	// use to allow any code_base to upgrade

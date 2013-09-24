@@ -103,4 +103,31 @@ extern void (* __pdata t4_vect) ();
 extern void (* __pdata adc_vect) ();
 extern void (* __pdata aec_vect) ();
 extern void (* __pdata dma_vect) ();
+
+//
+// Simple Arduino compatability macros
+//
+//	instead of pin numbers we use P(port,bit)
+//	P(1,2) refers to pin  p1.2 
+//
+//	"digitalWrite(P(1,2), HIGH);"
+//
+#ifndef LOW
+#define HIGH 1
+#define LOW 0
+#define P(p, b) p , b
+#define __XP(p,b) P##p##_##b
+#define __Xp(p,b) p
+#define __Xb(p,b) b
+#define digitalWrite(p , v) __XP(p)=(v)
+#define digitalRead(p) __XP(p)
+#define INPUT 0
+#define OUTPUT 1
+#define INPUT_PULLUP 2
+#define __XPINP(p) P##p##INP
+#define __XPDIR(p) P##p##DIR
+#define __PINP(p) __XPINP(p)
+#define __PDIR(p) __XPDIR(p)
+#define pinMode(p, m) if ((m)==OUTPUT) {__PDIR(__Xp(p)) |= (1<<__Xb(p)); __PINP(__Xp(p)) |= (1<<__Xb(p));} else { __PDIR(__Xp(p)) &= ~(1<<__Xb(p)); if ((m)==INPUT_PULLUP) {__PINP(__Xp(p)) &= ~(1<<__Xb(p)); } else {__PINP(__Xp(p)) |= (1<<__Xb(p));} }
+#endif
 #endif
