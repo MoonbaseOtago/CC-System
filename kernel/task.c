@@ -1457,6 +1457,17 @@ void
 task_restart() __naked
 {
 	__asm;
+	mov	dptr, #0777$
+	mov	r7, #0778$-0777$+1
+0001$:		mov	a, r7
+		movc	a, @a+dptr
+		mov	r0, a
+		mov	a, #_iretx
+		movx	@r0, a
+		inc	r0
+		mov	a, #_iretx>>8
+		movx	@r0, a
+		djnz	r7, 0001$
 	clr	a
 	mov	_waitq, a
 	mov	_waitq+1, a
@@ -1464,5 +1475,23 @@ task_restart() __naked
 	mov	sp, #0x80
 	setb	_EA
 	ljmp	_restart_point
+0777$:
+#ifdef DRV_KEYS
+	.db	_t1_vect
+#endif
+	.db	_uart_rx_0_vect
+	.db	_uart_rx_1_vect
+	.db	_uart_tx_0_vect
+	.db	_uart_tx_1_vect
+	.db	_p0_vect
+	.db	_p1_vect
+	.db	_p2_vect
+	.db	_t2_vect
+	.db	_t3_vect
+	.db	_t4_vect
+	.db	_adc_vect
+	.db	_aec_vect
+	.db	_dma_vect
+0778$:
 	__endasm;
 }
