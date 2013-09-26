@@ -182,64 +182,78 @@ putstr("SUOTA_START\n");
 	suota_allow_any_code = 0;
 	suota_key_required = 0;	// will be set at APP_INIT
 	if (CODE_HEADER.len[0] == 1) {	// integrated app
-		current_code = &CODE_HEADER;
 #ifdef SDEBUG
-//putstr("T0\n");
+putstr("T0\n");
+#endif
+		goto default_code;
+	}
+	current_code = (code_hdr __code*)BASE0;
+	next_code = (code_hdr __code*)BASE1;
+#ifdef SDEBUG
+putstr("T1");puthex(current_code->version[0]);puthex(next_code->version[0]);putstr("\n");
+#endif
+	if ((next_code->version[0]&1) == 0) 
+		next_code = 0;
+	if (current_code->version[0]&1) {
+		current_code = next_code;
+		next_code = 0;
+	} else
+	if (next_code &&
+	    next_code->arch == THIS_ARCH && next_code->code_base == THIS_CODE_BASE &&
+	    (current_code->version[1] < next_code->version[1] ||
+	    	(current_code->version[1] == next_code->version[1] &&
+	       	 current_code->version[0] < next_code->version[0]))) {
+#ifdef SDEBUG
+putstr("T2\n");
+#endif
+		current_code = (code_hdr __code*)BASE1;
+		next_code = (code_hdr __code*)BASE0;
+	} 
+#ifdef SDEBUG
+putstr("T");puthex(((int)current_code)>>8);puthex((int)current_code);putstr(" ");puthex(((int)next_code)>>8);puthex((int)next_code);putstr("\n");
+#endif
+	if (!current_code || current_code->arch != THIS_ARCH || current_code->code_base != THIS_CODE_BASE) {
+#ifdef SDEBUG
+putstr("T3\n");
 #endif
 wait_for_load:
-		x_app = (unsigned int (*) (u8 v))&current_code->data[0];
+		suota_enabled = 1;
 #ifdef SUOTA_CHANNEL
 		rf_set_channel(SUOTA_CHANNEL);
 #else
 		rf_set_channel(11);
 #endif
-suota_enabled = 1;	// remove this
+default_code:
+		current_code = &CODE_HEADER;
+		x_app = (unsigned char (*) (u8 v))&current_code->data[0];
 		return;
 	}
-	current_code = (code_hdr __code*)BASE0;
-	next_code = (code_hdr __code*)BASE1;
 #ifdef SDEBUG
-//putstr("T1");puthex(current_code->version[0]);puthex(next_code->version[0]);putstr("\n");
+putstr("C");puthex(current_code->crc[0]);puthex(current_code->crc[1]);puthex(current_code->crc[2]);puthex(current_code->crc[3]);putstr("\n");
 #endif
-	if (next_code->arch == THIS_ARCH && next_code->code_base == THIS_CODE_BASE &&
-	    (current_code->version[1] < next_code->version[1] ||
-	    	(current_code->version[1] == next_code->version[1] &&
-	       	 current_code->version[0] < next_code->version[0]))) {
-#ifdef SDEBUG
-//putstr("T2\n");
-#endif
-		current_code = (code_hdr __code*)BASE1;
-		next_code = (code_hdr __code*)BASE0;
-	} 
-	if (current_code->arch != THIS_ARCH || current_code->code_base != THIS_CODE_BASE) {
-#ifdef SDEBUG
-//putstr("T3\n");
-#endif
-		current_code = &CODE_HEADER;
-		suota_enabled = 1;
-		goto wait_for_load;
-	}
 	copy_crc(&current_code->crc[0]);
 	if (crc_check(&current_code->len[0])) {	// returns non-0 on fail
 #ifdef SDEBUG
-//putstr("T4\n");
+putstr("T4\n");
 #endif
+		if (!next_code) 
+			goto nfail;
+			
 		copy_crc(&next_code->crc[0]);
 		if (crc_check(&next_code->len[0]))  {
+nfail:
 #ifdef SDEBUG
-//putstr("T5\n");
+putstr("T5\n");
 #endif
-			current_code = &CODE_HEADER;
-			suota_enabled = 1;
 			goto wait_for_load;
 		}
 		current_code = next_code;
 		
 	}
 #ifdef SDEBUG
-	//putstr("T6\n");//puthex(((unsigned int)current_code)>>8);puthex((unsigned int)current_code);putstr("\n");
+	putstr("T6\n");//puthex(((unsigned int)current_code)>>8);puthex((unsigned int)current_code);putstr("\n");
 #endif
-	x_app = (unsigned int (*) (u8 v))&current_code->data[0];
+	x_app = (unsigned char (*) (u8 v))&current_code->data[0];
 	app(APP_LOW_LEVEL_INIT);
 }
 
@@ -643,7 +657,7 @@ retry:
 			ljmp	0
 			__endasm;
 		}
-		x_app = (unsigned int (*) (u8 v))&current_code->data[0];
+		x_app = (unsigned char (*) (u8 v))&current_code->data[0];
        		app(APP_LOW_LEVEL_INIT);
 		if ((t&3) == 2) {
 			app(APP_SUOTA_DONE);
@@ -781,9 +795,9 @@ incoming_suota_version(void) __naked
 		cjne    a, ar4, 0015$
                         mov     a, r0
                         cjne    a, ar3, 0016$
-                                ajmp    0002$
+                                ljmp    0002$
 0016$:                  jc      0014$
-0066$:                          ajmp    0002$
+0066$:                          ljmp    0002$
 0015$:          jnc     0066$
 
 0014$:

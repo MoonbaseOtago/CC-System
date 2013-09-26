@@ -25,7 +25,7 @@
 #include "protocol.h"
 #include "suota.h"
 
-extern unsigned int (* __data x_app) (u8 v);
+extern unsigned char (* __data x_app) (u8 v);
 #define APP_INIT		0
 #define APP_GET_MAC 		1
 #define APP_GET_KEY 		2

@@ -533,7 +533,7 @@ uart_setup()
 }
 
 
-unsigned int my_app(unsigned char op) 
+unsigned char my_app(unsigned char op) 
 {
 	switch (op) {
 	case APP_INIT:

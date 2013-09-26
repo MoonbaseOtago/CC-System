@@ -29,8 +29,8 @@ static volatile u8 __data enter_sleep_mod_flag;
 void putstr(char __code *cp);
 #define radio_busy 1
 
-static unsigned int dummy_app(u8 v) { return 0; }
-unsigned int (* __data x_app) (u8 v) = dummy_app;
+static unsigned char dummy_app(u8 v) { return 0; }
+unsigned char (* __data x_app) (u8 v) = dummy_app;
 
 static unsigned int __data last;
 static unsigned char __data tmp0;
@@ -1168,7 +1168,7 @@ main()
 #ifdef APP
 	{
 		extern code_hdr __code CODE_HEADER;
-		x_app = (unsigned int (* __data ) (u8))(&CODE_HEADER.data[0]);
+		x_app = (unsigned char (* __data ) (u8))(&CODE_HEADER.data[0]);
 	}
 #endif
 #ifdef TDEBUG

@@ -35,7 +35,7 @@ __xdata u8 leds[6];
 #define MAX_UNIQ	4
 __pdata u8 uniq_filter[MAX_UNIQ*2];
 __pdata u8 uniq_index;
-unsigned int my_app(unsigned char op) 
+unsigned char my_app(unsigned char op) 
 {
 	switch (op) {
 	case APP_SUOTA_DONE:
