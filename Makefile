@@ -23,6 +23,8 @@ THIS_VERSION = 2	# suota version
 # DRV_LEDS = 1		# define for leds driver
 # DRV_DAYLIGHT = 1	# define for daylight detector driver
 
+SDCC_INSTALL_DIR = /usr/local/share/sdcc
+
 all:	packet_loader kernel.ihx  kernel.lk serial.ihx app.ihx app_even.suota app_odd.suota 
 
 HOST_CC = gcc
@@ -45,8 +47,8 @@ endif
 ifdef DRV_DAYLIGHT
 CFLAGS += -DDRV_DAYLIGHT
 endif
-LDLIBS_SA = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
-LDLIBS = -k /usr/local/bin/../share/sdcc/lib/medium -k /usr/local/share/sdcc/lib/medium -l libsdcc -l libint -l liblong -l libfloat
+LDLIBS_SA = -k $(SDCC_INSTALL_DIR)/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
+LDLIBS = -k $(SDCC_INSTALL_DIR)/lib/medium -l libsdcc -l libint -l liblong -l libfloat
 LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=6
 LDFLAGS = -muwx -b SSEG=0x80 $(LDLIBS) -M -Y 
 LDEVEN = -b GSINIT0=$(BASE0)
