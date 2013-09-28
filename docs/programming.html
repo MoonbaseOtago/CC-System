@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Programming</title>
+<meta name="author" content="Paul Campbell" >
+<meta name="date" content="2013-09-26T23:20:45+1200" >
+<meta name="copyright" content="Paul Campbell">
+<meta name="keywords" content="">
+<meta name="description" content="">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8">
+<meta http-equiv="content-style-type" content="text/css">
+<meta http-equiv="expires" content="0">
+</head>
+<body>
+<h1>Programming</h1>
+<h2>Change list</h2>
+<ul>
+<li>24 Aug 2013 - Created
+</ul>
+<h2>Contents</h2>
+<ul>
+<li><a href="#api">Application API</a>
+        <ul>
+        <li><a href="#tasks">Tasks and timers</a>
+
+        <li><a href="#apps">Applications</a>
+        <li><a href="#rf">Sending/receiving packets</a>
+        <li><a href="#encryption">Encryption</a>
+        <li><a href="#suota">Software Update</a>
+        <li><a href="#interrupts">Interrupts</a>
+        <li><a href="#serial">Serial Debug</a>
+        <li><a href="#gpios">GPIOs</a>
+        <li><a href="#drivers">Drivers</a>
+        </ul>
+<li><a href="#mem">Memory organisation</a>
+<li><a href="#compiler">Compiler Issues</a>
+<li><a href="#build">Build system</a>
+<li><a href="#sa">Standalone applications</a>
+<li><a href="#net">Internet access</a>
+</ul>
+
+<a name="api"><h2>Application API</h2></a>
+
+<p>The standard API exported from the kernel can be included with '#include "interface.h"'</p>
+
+<a name="tasks"><h3>Tasks and timers</h3></a>
+
+<p>The totally minimal OS simply consists of a timer queue - clients can queue events to occur some time in the future - there are 32kHz/256 timer ticks per second (we provide a define HZ which is 32000/256 - 1 second) - this timer runs with the rest of the chip in it's very deep sleep mode (we'll add an API for that soon).</p>
+
+<p>A 'task' is a queueable element, it must be stored in __xdata, it contains a pointer to some code and
+some task queue bookkeeping (these should be initialised to 0) - create a task with something like: </p>
+<pre>
+
+        void task_callback_routine(task_t  *);
+        __xdata task task_block = {task_callback_routine,0,0,0};
+
+</pre>
+
+<p>Queue a task with:</p>
+
+<pre>
+
+        queue_task(&amp;task_block, HZ/2);  // call task_callback_routine(&amp;task_block) 1/2 a second from now
+
+</pre>
+
+<p>The maximum delay you can queue is 65534 ticks - about 12 minutes (the limit of the hardware sleep timer) - any more and you need to queue a long delay and count yourself</p>
+
+<p>You can cancel a task with:</p>
+
+<pre>
+
+        cancel_task(&amp;task_block);
+
+</pre>
+
+<p>A common thing to do is to call queue_task() with a 0 timeout which means call it asap (actually it goes after all the other tasks about to be called). We have a short cut for that queue_task_0(&amp;task_block) which also solves the problem of making calling it from interrupts safely (and SDCC's static storage of call arguments)</p>
+
+<p>Task callback routines are called with the task block that was called out as a parameter - they've been removed from the list and it's quit safe (and normal) to call queue_task() on them from within a callback routine.</p>
+
+<p>A task will not be interrupted by another task (even one queued with time 0 by an interrupt). There is no preemption here, one tiny stack that has to be shared by everyone, local variables are expensive in this architecture so use global variables - a state machine kicked by app calls and task callbacks is the preferred way to go.</p>
+
+<p>You should spend minimal time in tasks, as little as possible, get in do something, get out asap, don't spin to delay time, queue another task instead.</p>
+
+<a name="apps"><h3>Applications</h3></a>
+
+<p>The basic idea behind applications is that we need a mechanism for call backs from the kernel to user provided code. This works well as a clean interface for software updateable applications.</p>
+
+<p>A CPU can have a small kernel and an application - the kernel is fixed at manufacturing time while the application portion can be reliably updated over the radio at any time - the kernel uses a small portion of the available flash memory (8k is the goal) - the rest is available for applications for standalone apps they're linked and the app gets the remaining 24k, software updateable apps need room for two copies of ~12k each - half for the currently running app, the other half for an upgrading version.</p>
+
+<p>At boot time the kernel runs a CRC check on the app image with the highest version number, if it passes it becomes the running app, if the CRC fails the other app image is tested and if neither passes a dummy app is installed (updates can still occur).</p>
+
+<p>Apps have a standard code header:</p>
+
+<pre>
+
+        typedef struct code_hdr {
+                unsigned long    crc;
+                unsigned int     len;           // CRC starts here, len is length to the end
+                unsigned char    arch;          // should be different for every board
+                unsigned char    code_base;     // should be different for every type of code that runs on a board
+                unsigned char    version[2];    // version of that code bit 0 of byte 0 is the even/odd bit
+                unsigned char    data[1];       // first byte of instruction executed in app
+        } code_hdr;
+
+</pre>
+
+<p>A loadable app is valid if a CRC32 for len bytes from 'arch' matches the CRC in the header. The entry point (code) to the application starts at data[].</p>
+
+<p>The build system automatically creates the code_hdr structure for you, populates its fields, including the CRC and hooks the entry point up to my_app() - it also generates a hook that initialises initialised data areas for you. Standalone apps have a code header with dummy CRCs and lengths but real application code, naked kernels have a dummy code header and null application code.</p>
+
+<p>An app consists of a single event routine, it's passed an event type, if required there is global information qualifying some events. Like everything get in get out, as fast as you can - these calls are always made from task callout routines:</p>
+
+<pre>
+
+        unsigned int
+        my_app(unsigned char op)        // app MUST be called "my_app"
+        {
+                case APP_INIT:
+                        //
+                        //      called once when an app originally starts, set up your hardware, any
+                        //      interrupts start tasks to perform periodic operations
+			/	think of this as the main() of your program
+                        //
+                        return 0;       // return ignored
+                case APP_GET_MAC:
+                        //
+                        //      set the mac address here if you want to use something other than
+                        //      the default, otherwise do nothing
+                        //
+                        rf_set_mac(&amp;mac[0]);
+                        return 0;
+                case APP_GET_KEY:
+                        extern u8 __data rtx_key;
+                        //
+                        //      this is a request for you to set the 16 byte aes key number
+                        //      selected by rtx_key by calling rf_set_key();
+                        //
+                        rf_set_key(&amp;aes_keys[rtx_key][0]);
+                        return 0;
+                case APP_GET_SUOTA_KEY:
+                        //
+                        //      this is a request for you to set the 16 byte aes key number
+                        //      for suota
+                        //
+                        rf_set_key(&amp;suota_key);
+                        return 0;
+                case APP_RCV_PACKET:
+                        {
+                                // these are defined in interface.h, locations may change
+                                extern u8 __data rx_len;
+                                extern packet __xdata  * __data rx_packet;
+                                extern u8 __xdata  * __data rx_mac;
+                                extern __bit rx_crypto;
+                                extern __bit rx_broadcast;
+                                extern u8 rtx_key;
+
+                                //
+                                // rx_len bytes are stored pointed to by rx_packet;
+                                //
+                                // if rx_crypto is set the packet was encrypted
+                                //      (and passed, bad crypto'd packets are discarded
+                                //      if it was encrypted rtx_key contains the key used
+                                //      to decrypt it)
+                                //
+                                //  if rx_broadcast is true the packet was sent as a broadcast
+                                //
+                                //  rx_mac is the mac address of the packet sender
+                                //
+                                //  when called the receiver is still running but can only buffer
+                                //      a packet or two (depends on length) so be quick
+                                //
+                        }
+                        return 0;       // ignored
+                case APP_WAKE:
+                        // power wake (not yet implemented)
+                        return 0;       // ignored
+                case APP_KEY:           // only on playa boards - capacitive key presses/releases
+			return 0
+                case APP_SUOTA_START:
+                        return 0;       // 2 LSB:       0 means reboot after SUOTA
+                                        //              1 means no reboot, call init again
+                                        //              2 means no reboot, data has been saved call with APP_SUOTA_DONE to recover
+                                        // if bit 2 is set the first 1k of the old code will be erased before
+                                        //              control is passed to the new code - put your keys there
+                case APP_SUOTA_DONE:	// suota has completed and we're back
+			return 0;
+
+                default:
+                        return 0;       // for future comparability return 0 for undefined selectors
+			
+               }
+        }
+
+</pre>
+
+<a name="rf"><h3>Sending/receiving packets</h3></a>
+<p>We have a bunch of routines for sending packets and controlling the RF interface:</p>
+
+<pre>
+
+        void rf_receive_on();   // turns the receiver on
+        void rf_receive_off();  // turns the receiver off (saves a lot of power)
+
+        void rf_set_transmit_power(unsigned char power); // sets output power
+                // valid values:        XMT_POWER_NEG_3DB       -3dB
+                //                      XMT_POWER_0DB           0dB
+                //                      XMT_POWER_4DB           +4dB
+                //                      XMT_POWER_MAXDB         MAX
+
+        void rf_set_channel(unsigned char channel);   // channel 11-26
+
+        void rf_set_key(unsigned char __xdata *key);  // set the 16-byte send/receive crypto key from xdata
+        void rf_set_key(unsigned char __code *key);   // set the 16-byte send/receive crypto key from flash
+        void rf_set_mac(unsigned char __xdata *key);  // set the 8-byte mac
+
+        #define NO_CRYPTO 0xff
+        extern unsigned char __data rtx_key;
+        void rf_send(packet __xdata* pkt, unsigned char len, unsigned char crypto_key, unsigned char __xdata*mac);
+
+</pre>
+
+<p><b>rf_send()</b> sends a packet <b>pkt</b> of length <b>len</b>, and applies crypto if requested using the supplied <b>crypto_key</b> number - use <b>NO_CRYPTO</b> if you don't want the packet encrypted - key numbers must be less than or equal to 0x7f.</p>
+
+<p> Key changes are done at the app level whenever the RF layer needs to switch keys it will call your app with <b>APP_GET_KEY</b> - in response you must call <b>rf_set_key()</b> using the value in <b>rtx_key</b> to choose a key (it's quite valid to just return a single key to all calls if that's what you need).</p>
+
+<p>No guarantee is provided that the datagram will be received. The packet must be stored in __xdata space.</p>
+
+<p>The <b>mac</b> argument can be NULL, if so a broadcast packet will be sent, otherwise a 64-bit MAC address is required.</p>
+
+<p>Note: unlike traditional ethernet 802.15.4 expects there to be an awful lot of devices, it uses  64-bit/8-byte addresses</p>
+
+<p>The packet format we use is optional - you can use anything you like - however of you want to
+use software update over the air you'll have to play nice and use it since the SUOTA protocol uses it.</p>
+
+<pre>
+
+        typedef struct packet {
+                u8      type;
+                u8      arch;
+                u8      code_base;
+                u8      version[2];
+                u8      data[1];
+        } packet;
+
+        //  type        packet type - if you want to choose your own choose values over 0x40
+        //              if you use crypto with private keys for all packets you wont collide
+        //              as you'll never see anyone else's packets
+        //  arch        hardware object we support - we'll allocate a different value
+	     //		for each unique board	
+	     //  code_base	code type 
+        //  version[2]  version of software we support - start at one and increment
+			for every new 
+        //  data[N]     data payload - you only have ~100 bytes 802.11 packets are tiny
+
+</pre>
+
+<p>However if you are using SUOTA and <b>suota_enabled</b> is true <b>rf_send()</b> will assume you are using our format and will fill in  <b>arch</b>, <b>code_base</b>, and <b>version</b> for you from the code header of the application you have loaded otherwise all the bytes are yours to play with.</p>
+
+<p>The App interface is used to receive packets and will also poll for a crypto key and mac address during system start up.</p>
+
+<p>If you're using the playa macless protocol the first 3 bytes of the data packet are used for TTL and
+to stop multiple retransmission of broadcast packets.</p>
+
+<pre>
+
+        typedef struct broadcast_filter {
+                u8      hops;
+                u8      uniq[2];        // uniq filter
+        } broadcast_filter;
+        //  hops        used to stop packets from living forever in the net
+        //  uniq[2]     unique packet filter (for routing) - if you set hops to 0 these
+        //              bytes are available to you
+
+</pre>
+
+<p>A received packet is announced to an application through an <b>APP_RCV_PACKET</b> event 
+
+<pre>
+
+        case APP_RCV_PACKET:
+                {
+                        // these are defined in interface.h, locations may change
+                        extern u8 __data rx_len;
+                        extern packet __xdata  * __data rx_packet;
+                        extern u8 __xdata  * __data rx_mac;
+                        extern __bit rx_crypto;
+                        extern __bit rx_broadcast;
+                        extern u8 rtx_key;
+
+                        //
+                        // rx_len bytes are stored pointed to by rx_packet;
+                        //
+                        // if rx_crypto is set the packet was encrypted
+                        //      (and passed, bad crypto'd packets are discarded
+                        //      if it was encrypted rtx_key contains the key used
+                        //      to decrypt it)
+                        //
+                        //  if rx_broadcast is true the packet was sent as a broadcast
+                        //
+                        //  rx_mac is the mac address of the packet sender
+                        //
+                        //  when called the receiver is still running but can only buffer
+                        //      a packet or two (depends on length) so be quick
+                        //
+                 }
+                 return 0;       // ignored
+
+</pre>
+
+<p>Global variables carry information about the incoming packet <b>rx_packet</b> points to the data payload, <b>rx_len</b> is its length. If <b>rx_broadcast</b> is set it was a broadcast packet. <b>rx_mac</b> points to the 8 byte mac address of the sending system. If <b>rx_crypto</b> was set then the packet was encrypted with the key given in <b>rtx_key</b>.</p>
+
+<p>The standard kernel load has some unused space in the low interrupt vectors, we sneak a node specific 4 bytes at address 0x000e and another 4 at 0x0016 - this is a default value - it can be overriden by an application at any time - in particular when an <b>APP_GET_MAC</b> event is received. The code loader GUI program has a feature that can be used to generate unique MAC addresses by patching these bytes in kernels as they are written to new hardware.</p>
+
+<a name="encryption"><h3>Encryption</h3></a>
+
+<p>Our hardware implements AES-128, it uses 16-byte keys</p>
+
+<p>Encryption is optional, but there's more to in than just keeping secrets - the crypto sum used on each packet provides a far better protection than the usualy CRC32. Packets are discarded if received with bad crypto, you'll never see them - that means that two networks can happily share the same RF frequency if they use different crypto keys</p>
+
+<h4>Key Management</h4>
+
+<p>Packets carry a small integer identifying their key - values can be in the range 0x00-0x7f - the underlying crypto hardware carries a cached key, the global variable <b>rtx_key</b> carries the integer for the currently cached key - you can invalidate the cache by setting <b>rtx_key</b> to <b>NO_CRYPTO</b>.</p>
+
+<p>If you try and send a packet, or a packet arrives with a key that doesn't match the currently cached key then your application will receive an <b>APP_GET_KEY</b> event - when you receive one of these call <b>rf_set(&amp;key);</b> to set the current key to your key that corresponds to <b>rtx_key</b>. If your key is stored in flash use <b>rf_set_c(&amp;key);</b> instead.</p>
+
+<p>So crypto is easy - install identical keys at both ends, implement the <b>APP_GET_KEY</b> event to set them when requested and start passing your key number(s) in the <b>crypto_key</b> parameter of <b>rf_send()</b>.</p>
+
+<a name="suota"><h3>Software Update</h3></a>
+
+<h4>Basics</h4>
+
+<p>Software Update Over The Air (SUOTA) - allows us to replace software on devices in an arbitrary network of boards. Each board contains information in the code header of the current application identifying the code running in it - if the global variable <b>suota_enabled</b> is set then the RF subsystem inspects all incoming successfully encrypted packets and if it sees a header in one that indicates that a neighbouring node has a newer version of the current application it triggers a software update exchange with the neighbour.</p>
+
+<h4>Update Conditions</h4>
+<p>More specificly the default behaviour when <b>suota_enabled</b> is set:</p>
+<ul>
+<li>Systems running standalone apps never SUOTA.
+<li>Naked kernels (a system with a kernel and no loaded app) will update to any visible application with the same <b>type</b> (the same type of hardware)
+<li>If the global variable <b>suota_allow_any_code</b> is set then the application will update to any visible application with the same <b>type</b> (the same type of hardware) - this is the case where you want to allow the switch of the board to another app
+<li>If the global variable <b>suota_allow_any_code</b> is clear (the default) the application will update only to another application with the same <b>type</b> and the same <b>code_base</b> and a larger <b>version</b> - this is the usualy SUOTA update case
+</ul>
+
+<p>At system startup if a valid SUOTA application is already loaded <b>suota_enabled</b> is cleared - if you want SUOTA for you app you must explicitly set <b>suota_enabled</b> when you handle an <b>APP_INIT</b> or <b>APP_SUOTA_DONE</b> event.</p>
+
+<h4>SUOTA encryption</h4>
+<p>For both reliability and security reasons all SUOTA traffic is encrypted - actual SUOTA traffic uses a specific SUOTA key with a key index outside the normal 0x00-0x7f range - kernels are compiled with a specific SUOTA key - you can change this default by editing kernel/suota_key.c. Applications can override the default SUOTA key by setting the global variable <b>suota_key_required</b> - if this is set applications will receive an <b>APP_GET_SUOTA_KEY</b> event snad should load their bespoke SUOTA key with <b>rf_set_key()</b> or <b>rf_set_key_c()</b></p>
+
+<h4>Application images</h4>
+<p>We reserve space for two copies of applications, that limits sizes - but we don't have enough RAM available to hold an image of a new application while upgrading to a new application, instead we place the non-changing kernel in low flash memory and split the rest (on flash page boundaries)  between the current app and the next (or currently) updating one</p>
+
+<p>The 8051 is an old CPU design, in particular it has no long distance relative branch or subroutine call instructions - this means that code must be compiled to load at a specific base address - by convention we build applications with even numbered version to load at one address, and odd numbered addresses at another - under normal behaviour, switching from code of one version to the next one, new code is loaded 
+nto the correct place. But the world isn't perfect, sometimes a node may miss an update becouse it moved out of range - we support upgrading from even numbered versions to even numbered ones and odd numbered to odd ones - it's slightly less reliable than a simple update, involves 2 flash copies and requires more system resources (2 1k xdata buffers).</p>
+
+<p>The last thing we want is to turn a board into a brick with a failed application load, the SUOTA code is  pretty paranoid, it will give up if it thinks something bad has happened - the only truely unrecoverable error that can occur is when the internal 8051 flash has failed, or if we're doing the copy at the end of an even-&gt;even or odd-&gt;odd upgrade when power fails. When these failure happen you'll see a CPU reset and come back either with the previous application in place, or as a naked kernel that will load the next app it sees advertised.</p>
+
+<p>At system startup time the kernel probes for applications - it looks for valid images, in the right place, with good CRCs, the correct header for the hardware - if it finds two it chooses the ones with the largest version number.</p>
+
+<h4>Application Continuity</h4>
+
+<p>Sometimes you want to create an upgradeable app that has persistant data - during the upgrade process when a good application image has been captured the system reaches a point where it must switch to the new application, it indicates that this is about to happen by sending an <b>APP_SUOTA_START</b> event to the application, the app returns a value encoding how it wants to handle the process:
+<ul>
+<li>bits 1:0 encode how we will continue
+	<ul>
+	<li>0: The CPU is reset
+	<li>1: system context is cleared, all queued tasks are deleted and the new app is sent an <b>APP_INIT</b> event
+	<li>2: system context is cleared, all queued tasks are deleted and the new app is sent an <b>APP_SUOTA_DONE</b> event
+	</ul>
+<li>if but 2 is set the first 1k (the code header and the data following it) of the old app will be erased before control is transfered to the new app - put your crypto keys here and use this if you don't trust the new app you're passing control to 
+</ul>
+
+<p>Sometimes you want to pass data from one app to a new one - in this case we provide a mechanism to squirrel away some data high in xdata sram when you receive an <b>APP_SUOTA_START</b> event and then recover it when you receive an <b>APP_SUOTA_DONE</b> event</p>
+
+<pre>
+
+	unsigned char __xdata *suota_allocate_save_space(u8 v);
+	unsigned char suota_get_save_size();
+	unsigned char __xdata *suota_get_save_space();
+
+</pre>
+
+<p>Call <b>suota_allocate_save_space()</b> from an <b>APP_SUOTA_START</b> event to allocate a location to store data - keep it as small as possible - suota needs the first 2k of the current app space to perform the next upgrade step (over and above the kernel's usage) there's a chance that this space will overlap your current data so copy it carefully (it's allocated at the end of xdata memory).</p>
+
+<p>Alternatively you can allocate a save space from an <b>APP_INIT</b> and always keep your data there</p>
+
+<p>From an <b>APP_SUOTA_DONE</b> event call <b>suota_get_save_space()</b> to get a pointer to your save space and <b>suota_get_save_size()</b> to get it's size - make sure that any new app leaves enough space at the end of xdata memory (plus 1 byte) for this space otherwise the initialisation of the new app will trash the saved data).</p>
+
+<h4>Playing nicely with others</h4>
+
+<p>In order for SUOTA to work well boards must be able to receive periodic notifications of the state of neighbouring board's software versions. If your app already periodically broadcasts somethingthen you don't need to do anything special, the SUOTA info piggybacking in the packet headers will do the work for you, if it doesns't you should send periodic NULL broadcast packets when your board is awake.</p>
+
+<a name="interrupts"><h3>Interrupts</h3></a>
+
+<p>We've exposed all the CPU's interrupt vectors not already used by the kernel to you - you can install your own handlers from your app's <b>APP_INIT</b> handler by simply storing a pointer to them - they are found in the variables:</p>
+
+<pre>
+
+	extern void (* __pdata uart_rx_0_vect) ();
+	extern void (* __pdata uart_rx_1_vect) ();
+	extern void (* __pdata uart_tx_0_vect) ();
+	extern void (* __pdata uart_tx_1_vect) ();
+	extern void (* __pdata p0_vect) ();
+	extern void (* __pdata p1_vect) ();
+	extern void (* __pdata p2_vect) ();
+	extern void (* __pdata t2_vect) ();
+	extern void (* __pdata t3_vect) ();
+	extern void (* __pdata t4_vect) ();
+	extern void (* __pdata adc_vect) ();
+	extern void (* __pdata aec_vect) ();
+	extern void (* __pdata dma_vect) ();
+
+</pre>
+
+<p>In our kernel the usual way to handle an interrupt is to do the minimal amount of work to clear the interrupt then call <b>queue_task_0(&amp;handler_task)</b> to queue some code to do the heavy lifting.</p>
+
+<p>The serial gateway app has an example of how this is done for a serial driver, the rest is up to you</p>
+
+<p>There are some non-obvious things that need to be saved when you take an interrupt:</p>
+<ul>
+<li> the extra 25xx dptr registers
+	<ul>
+        <li>DPS (you should set it to 0 on entry if you are going to use dpl/dph)
+        <li>DPL1
+        <li>DPH1
+	</ul>
+<li> parameters and local variables to routines that the compiler
+        has made static (ie all of them) that you call from an interrupt youtine - we provide a
+        queue_task_0() that saves the time parameter to
+        queue_task() for you and passes 0
+</ul>
+
+
+<a name="serial"><h3>Serial Debug</h3></a>
+
+<p>We provide some minimal polled serial code for simple debug:</p>
+<ul>
+<li>putchar(char c) - prints a character on the serial console
+<li>putstr(char __code *cp) - prints a string on the serial console
+<li>puthex(unsigned char v) - prints a hex value on the serial console
+</ul>
+
+<p>SDCC provides things like printf()/etc which use the provider putchar() - they are large and unwieldy and may use up all the small amount of space that's available to you</p>
+
+<p>If you want samples of interrupt driven serial code that you can steal they can be found in the serial gateway application code in serial/serial_app.c</p>
+
+<a name="gpios"><h3>GPIOs</h3></a>
+
+<p>CC2533 chips have 19 gpio pins - they are organised in 2 8-bit ports P0 and P1 and 1 3-bit port P2. You can access can access them directly from C by name or the component bits as P0_0, P0_1, ... P0_7, P1_0, ... etc </p>
+
+<p>If you're used to Arduino style access to digital IO ports you can use the macros provided for <b>digitalRead()</b>, <b>digitalWrite()</b> and <b>pinMode()</b> for simple GPIO access - instead of a port number use the P(port, bit number) macro - for example "digitalWrite(P(1,5), HIGH)" makes the same code as "P1_5 = 1"</p>
+
+<a name="drivers"><h3>Drivers</h3></a>
+
+<p>We have a tiny kernel, it doesn't have a driver model as such, instead we have a small number of software modules for driving devices we've implemented that can optionally be compiled into the kernel</p>
+
+<h4>Daylight sensor</h4>
+
+<p>Define <b>DRV_DAYLIGHT</b> in the Makefile</p>
+
+<p>This is a simple daylight sensor - a pullup resistor and a phototransistor sensed through a digital GPIO port can be read with the <b>daylight()</b> call.</p>
+
+<h4>WS2811 based LED drivers</h4>
+
+<p>Define <b>DRV_LEDS</b> in the Makefile</p>
+<p>WS2811/2812 LED are RGB are becoming ubiquitous, you see them in cheap LED strips from China, in Adafruit's NeoPixels, and our playa board. It has a, umm, challenging, protocol to drive by bit-banging.</p>
+
+<p>We're releasing the code we use for the playa board, it drives 2 strings of 1 pixel each, and a voltage up converter - it's a tightly tuned piece of assembly code, you'll have to tweak it to drive longer strips. We use an in-memory buffer for the two pixels that is a 6 byte array RRGGBB - <b>leds_rgb(&amp;array[0])</b> powers up the voltage up converter and sends data to the two pixels, <b>rgb_off()</b> powers it down (you should send black to it first).</p>
+
+<h4>Capacitive buttons</h4>
+<p>Define <b>DRV_KEYS</b> in the Makefile</p>
+
+<p>The playa board has 4 keys - they are arranged in 2 pairs - implemented by two PCB plates with a 5.1M resistor between them - the GPIO's they're wired to are connected to a hardware timer that measures the discharge time of the PCB plates through the 5.1M resistor.</p>
+
+<p>A downside of this circuit is that the way that the CC2533's GPIOs work, the keyboard scanner messes with the simple serial output we use for debug, you may lose characters while scanning.</p>
+
+<p><b>keys_on()</b> turns on the keyboard scanner, <b>keys_off()</b> turns it off - when we see a key change state your app receives an <b>APP_KEY</b> event - the global variable <b>key</b> contains the key number of the key that changed, and <b>key_down</b> tells you whether it's been pressed or released.</p>
+
+<a name="mem"><h2>Memory organisation</h2></a>
+
+<p>The 8051 has a history behind it - nominally it supports 3 memory address spaces:</p>
+<ul>
+<li>A 64k code space (flash) - instructions for executing code and fixed data - this where we load our kernel and application images - the compiler labels this space as "__code"
+<li>fast data memory - there are 256 bytes of 'fast' memory, it doubles for lots of things
+	<ul>
+	<li>fixed CPU registers
+	<li>device registers
+	<li>directly accessable bits "__bit"
+	<li>directly accessed memory "__data"
+	<li>the call stack
+	</ul>
+<li>External memory - compiler calls it "__xdata"
+	<ul>
+	<li>the first 256 bytes can be accessed slightly more easily by the compiler "__pdata"
+	<li>generic "__xdata"
+	</ul>
+</ul>
+
+<img src="d2.png" width="500">
+
+<p>The CC2533 maps all the ram spaces into one unified 4k byte block, the 'fast data' space is located at the end of the 4k space, it can be accessed as __xdata. In practice this means that there's only 3.75k worth of memory available to you in __xdata</p>
+
+<p>Add to that the kernel takes some of each of the spaces for itself - largely ~600 bytes of __xdata space for networking and crypto buffers.</p>
+
+<p>here's a very rough estimate of how much space is available:</p?
+<table border="1">
+<tr><td>Space</td><td>Total Available</td><td>Kernel Use</td><td>Available for use</td></tr>
+<tr><td>__data</td><td>104 bytes</td><td>24 bytes</td><td>80 bytes</td></tr>
+<tr><td>__bits</td><td>128 bits</td><td>8 bits</td><td>120 bits</td></tr>
+<tr><td>__pdata</td><td>256 bytes</td><td>101 bytes</td><td>151 bytes</td></tr>
+<tr><td>__xdata</td><td>3.5k bytes</td><td>609</td><td>2975 bytes</td></tr>
+</table>
+
+<p>These numbers will change depending on which options the compiler is built with.</p>
+
+<a name="compiler"><h2>Compiler Issues</h2></a>
+
+<p>We use SDCC as a compiler, it's open source and does an OK job of making code in most cases - we compile using the 'medium' memory model and optimise for size - even so the 8051 is a sad target, if you're running out of flash space breaking into assembly can reduce the size of code by 50%.</p>
+
+<p>The 8051 has very poor support for memory addressing, this means that C structures are expensive, and access to variables local to a subroutine (local variables and parameters) are so expensive that the compiler converts them to static and stores them in __pdata - so avoid recursion - there are also issues with interrupts which may cause unexpected recursion - <b>queue_task_0()</b> is provided to help get around the most common case.</p>
+
+<p>The first parameter to a subroutine is passed through registers rather than a static memory location - single parameter subroutines tend to be faster</p>
+
+<p>SDCC also supports untyped pointers - 3 byte entities that could point to xdata, pdata, fast data or flash memory, not only are they larger but they're also much slower - some normal C library routines like memcpy() amd memset() are expensive (in space and time) because they are coded for the generic case.</p>
+
+<p>So always type your variables - tell the compiler where you want to put data and where pointers point to - the SDCC manual has some examples but here are some basics:
+
+<pre>
+	int __xdata fred;	// an integer stored in __xdata
+	__bit mike;		// a boolean stored in __bit (quite efficient!)
+	struct joe __pdata j;	// a structure stored in __pdata
+	char __code * __data cp;// a pointer to a string stored in flash,
+				// the pointer is stored in fast sram
+</pre>
+
+<p>C strings created by the compiler always end up in __code/flash</p>
+
+<p>Some kernel routines used typed pointers for example we offer <b>rf_set_key()</b> to set keys from __xdata, for <b>rf_set_key_c()</b> for data stored in __code/flash. Also <b>putstr()</b> displays a constant string from __code/flash, not from a variable buffer.</p>
+
+<p>There's no room for a heap - don't use malloc() or free(), instead allocate your storage staticly</p>
+
+<a name="build"><h2>Build system</h2></a>
+
+<p>Our build system is the simple Makefile in the top level directory of the source tree - it contains examples of how to build a kernel, a standalone applications and a SUOTA application</p>
+
+<p>SDCC uses different naming conventions for files:</p>
+<ul>
+<li>.rel object files (equivalent to .o files)
+<li>.ihx binary code files, loadable intel hex (equivalent to executable binaries)
+<li>.lk linker code files
+<li>.lst source listing files
+<li>.rst source listing files with real binary addresses - post linking
+<li>.map link map output files
+</ul>
+
+<p>we also add:</p>
+<ul>
+<li>.suota - code files suitable for SUOTA
+</ul>
+
+<p>There are two types of build:</p>
+
+<ul>
+<li>standalone applications - all code (kernel and application) built into one image suitable for programming
+<li>SUOTA (software update over the air) - in this case we build a base kernel.ihx file that is burned once into each device on manufacture - then we build even and odd SUTOA images that can be downloaded over RF
+</ul>
+
+<p>We recommend you use standalone apps until you are ready to freeze your kernel - then use SUOTA builds</p>
+
+<p>The basic process for building a kernel or building a standalone app involves:</p>
+<ul>
+<li> compile .rel files from .c
+<li> link .rel files to make .map and .ihx files
+</ul>
+
+<p>To build SUOTA loadable code (look at the instructions in the Makefile for a checklist):</p>
+<ul>
+<li>build a kernel
+<li>make a linker control file kernel.lk by post processing the kernel map file using the map.pl file - this exports kernel symbols to apps so that they can call into the kernel and
+<li>compile app .rel files from .c
+<li>link .rel files plus linker control file kernel.lk to make a .ihx file
+<li>post process the .ihx file to make a .suota file using fixcrc which fills in the code_header structure and creates a binary file suitable for the serial loader code to broadcast for SUOTA
+</ul>
+
+<p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we reccomend that for a standalone app you build your kernel in one place and copy over the frozen kernel state, that represents the kernel you have frozen in the field to the new build environment - copy the Makefile and trim it to match - instructions on how do do this are containe din the makefile itself.</p>
+
+<a name="sa"><h2>Standalone applications</h2></a>
+
+<p>Standalone apps consist of an app compiled directly into the kernel, they can be loaded by the programmer - you use a standalone app as a quick way to do testing before you freeze your kernel and start using SUOTA, or you can always use a standalone app because you want to make something larger than the 12k that's available to a SUOTA app.</p>
+
+<p>The Makefile has a couple of examples of how to build standalone apps, including the serial gateway which is such an app</p>
+
+
+<a name="net"><h2>Internet access</h2></a>
+
+<p>A network of devices is a bit useless without being able to get data in and out to the wider internet.  While we don't support IP (or any routing, that's up to you) we do have a version of our software that can be loaded into a dev board (serial.ihx) and which allows users to talk to it over a serial connection.  The interface library can be found in serial/packet_interface.cpp and serial/packet_interface.h - there are C++ and plain C bindings available. The interface also supports a scriptable interface.</p>
+
+<p>You can build the <b>packet_loader</b> host application  which uses this library and will run on a host system and provide a SUOTA server serving multiple different types of boards, or you can build your own server that can do SUOTA as well as providing your own gateway to anything you like.<p>
+
+<p>The <b>packet_loader</b> program takes one argument - the serial port that should be opened - it defaults to /dev/USB0. If you give it the <b>-i script</b> flag it will open the script file and execute commands from it (for example it could set up crypto keys and SUOTA files) then sit there forever responding to incoming packets.</p>
+
+<p>Alternatively the <b>-e suota_file</b> flag allows you to push a single copy of a new set of firmware to a network, you need to have attached the crypto key to the suota file using the <b>fix_crc -k ...</b> command during the build process - if you use the <b>-e</b> flag then you can alo use the  <b>-c channel</b> and <b>-m mac</b> flags</p>
+
+<p>If you don't give the <b>-i</b> or <b>-e</b> flags it will open an interactive session and allow you to send and receive interactive commands.</p>
+
+<p>In this API crypto keys are 16 bytes - mac addressess are 8 bytes (not the traditional 6). In the scripting interface You can optionally insert colons to delineate bytes in keys and mac addresses.</p>
+
+<p>The access library (include "serial/packet_interface.h") allows your host application to create multiple independant gateways (using different serial ports) by instantiating <b>rf_interface(char *port_name, rf_rcv callback)</b> objects,  the following methods are supported:<p>
+<ul>
+<li><b>opened_ok()</b>             - true if the serial port opened cleanly, call this after creatring the object, if it fails delete the object
+<li><b>on()</b>                    - turns the receiver on
+<li><b>off()</b>                   - turns it off
+<li><b>ping()</b>                  - just sends a packet to see if the board is alive
+<li><b>reset()</b>                 - resets the developmenbt board
+<li><b>set_auto_dump(FILE*)</b>    - dumps packet contents to the named output file
+<li><b>set_promiscuous(on/off)</b> - ignores mac addresses dumps all traffic seen pn a channel
+<li><b>set_raw(on/off)</b>         - ignores crypto and dumps raw packet data - caution all incoming packets stop being decrypted, SUOTA will stop
+<li><b>set_channel(chan)</b>       - sets the rf channel some value in the range 11-26
+<li><b>set_mac(unsigned char *)</b>- sets the mac addrtes (8 bytes)
+<li><b>set_key(k, unsigned char *)</b> - sets key number k (0-7) to the 16 bytes passed in
+<li><b>send(mac, data, len)</b>    - sends len bytes from data to mac (or broadcast if mac is NULL)
+<li><b>send_crypto(k, mac, data, len)</b>- same as send but encrypted with key k (0-7, must have been loaded already)
+<li><b>command(char *)</b>         - execute a single scripted command
+<li><b>initialise(char*)</b>       - run the scripts from file
+<li><b>set_suota_upload(k, a, c, v, file)</b>- server file using set_suota_versioncrypto key k for a/c/v requests - if k is NULL upload will load the key from the file (set by <b>fix_crc -k ...</b>)
+<li><b>send_repeat(secs, k, a, c, v)</b> - send a NULL packet with suota data using key k every so many secs (0 to cancel)
+</ul>
+
+<p>C bindings for all these are all available - just add <b>rf_</b> to the names above and add ain initial first parameter of type <b>rf_handle</b> - create one with <b>rf_open(char *port_name, rf_rcv callback)</b> and dispose of it with <b>rf_close(handle)</b></p>
+
+<p>If you specify a <b>rf_rcv</b> callback hook when you create a <b>rf_interface</b> object the callback will be called whenever an incoming packet is received - parameters are:
+<ul>
+<li>rf_handle - this is declared <b>rf_handle</b>  to keep the C-bindings happy for C++ simply cast it to <b>rf_interface*</b>.
+<li><b>broadcast</b> - true for a packet sent to a broadcast address
+<li><b>crypto</b> - true for an encrypted packet
+<li><b>key</b> - if <b>crypto</b> is set then this is the key index that was used to decrypt the packet
+<li><b>mac</b> - pointer to the 8-byte mac address of the node that sent this packet
+<li><b>data</b> - pointer to data payload 
+<li><b>len</b> - length of data payload
+</ul>
+
+<p>There's an internal script interpreter - you can call <b>command()</b> to execute a single command and  <b>initialise()</b> or <b>initialize()</b> to execute commands from a file.  The scripted commands are:</p>
+<ul>
+<li>a: autodump                         - a[+/-]
+<li>A: autodump, raw and promiscuous    - A[+/-]
+<li>c: set rf channel 11-26             - c channel
+<li>m: set mac                          - m a:b:c:d:e:f:g
+<li>K: load key (16 hex bytes)          - K key-num value
+<li>O: receiver on
+<li>o: receiver off
+<li>p: ping
+<li>P: set promiscuous (snoops any packet) -P[+/-]
+<li>r: set raw - dumps all received pckets -r[+/-]
+<li>s: send a broadcast packet          - s * cmd count
+<li>s: send a directed packet           - s a:b:c:d:e:f:g cmd count
+<li>!: send a broadcast crypto packet   - ! key-num * cmd count
+<li>!: send a directed crypto packet    - ! key-num a:b:c:d:e:f:g cmd count
+<li>u: suota update listener            - u arch code_base version file
+<li>U: rpt snd packet every N secs      - U N key arch code_base version
+</ul>
+
+<p>You cans use 'u' to set up a respnder daemon to push SUOTA firmware to boards, and 'U' to generate null broadcast messages to trigger updates in remote nodes</p>
+
+<p>In addition when you use the <b>packet_loader</b> host app interactively it supports the above acommands as well as the following commands:</p>
+<ul>
+<li>?: help
+<li>h: help
+<li>i: initialise execute commands from a file - i file
+<li>q: quit
+</ul>
+
+<p>You can use a board as a channel sniffer by variously enabling the autodump, promisuous, and maybe raw modes</p>
+
+<p>We expect programers to take the code provided and include it in a host specific gateway application. Provide a callback routine to handle packet traffic from a network and <b>send()</b> or <b>send_crypto()</b> to send it. Use the <b>initialise()</b> method to load keys/mac addresses/channels from script files, and also potentially to set up SUOTA (see the examples in the suota_test directory) to update nodes.</p>
+</body>
+</html>

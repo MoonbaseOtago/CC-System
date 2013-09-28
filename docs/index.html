@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cheap RF - a low cost open source 802.15.4 platform</title>
+<meta name="author" content="Paul Campbell" >
+<meta name="date" content="2013-09-24T15:31:44+1200" >
+<meta name="copyright" content="Paul Campbell">
+<meta name="keywords" content="">
+<meta name="description" content="">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8">
+<meta http-equiv="content-style-type" content="text/css">
+<meta http-equiv="expires" content="0">
+</head>
+<body>
+<h1>Cheap RF project Documentation</h1>
+<img src="d3.png" width="600">
+<h2>Change list</h2>
+<ul>
+<li>24 Aug 2013 - Created
+</ul>
+<h2>Contents</h2>
+<ul>
+<li><a href="#Introduction">Introduction</a>
+<li><a href="#hardware">Hardware Platforms</a>
+<li><a href="#starting">Getting Started</a>
+<li><a href="#programming">Programming</a>
+<li><a href="#purchase">Purchase</a>
+<li><a href="#license">Licenses</a>
+<li><a href="#downloads">Downloads</a>
+<li><a href="#links">Links</a>
+<li><a href="#credits">Credits</a>
+</ul>
+
+
+<a name="Introduction"><h2>Introduction</h2></a>
+
+<h3>Goals</h3>
+
+<p>Simply:</p>
+<ul>
+<li>Cheap
+<li>Programmable
+<li>Low power
+<li>Hackable
+</ul>
+
+<h3>Overview</h3>
+
+<p>This project started out with an attempt to make a really cheap RF platform for a Burning Man art project (to come) - with a $5-10 goal there weren't a lot of chips available to us - we chose the Texas Instruments (TI) <a href="http://www.ti.com/product/cc2533">CC2533</a> - it's cheap, can be built with a minimal component count and we can program it to update its software in the field. The CC2533 sends and receives 802.15.4 packets at 2.4GHz, there's hardware support for AES-128 encryption, an 8051 CPU and the usual collection of SoC devices uarts/spu/i2c/gpios/timers etc. This is the same protocol that Zigbee runs on top of - we're not explicitly using Zigbee protocols (but not precluding them), we're providing MAC level packet delivery, the rest is up to you.</p>
+
+<p>Another issue is that GCC doesn't support 8051 CPUs, TI's sample code for programming the chip is only provided for a proprietary for-profit C compiler - we've produced our own set of RF libraries, and incorporated them into a minimalist OS. It includes encrytpion, timers, power control and software update over the air.</p>
+
+<p>The result is a well-supported platform for cheap sensors, part of the much vaunted "internet ofi things", something you can build today.</p>
+
+<h3>Basic Platform</h3>
+
+<p>Our basic platform includes a CC2533:</p>
+<ul>
+<li>8051 CPU - an 8-bit CPU
+<li>32MHz - clock
+<li>32k flash - code ram
+<li>256 bytes - fast sram
+<li>3.75k - sram
+<li>802.15.4 - radio
+<li>AES-128 - encription engine
+<li>2 - uart/spis
+<li>19 - GPIOs
+<li>4 - timers
+<li>sleep timer/power controller
+<li>watchdog timer
+</ul>
+
+<p>So roughly a fast Apple II in a chip with a radio.</p>
+
+<p>The CC2533 comes in larger models (64k and 96k), and there are other devices in the CC25xx family with extra (USB, ADC) features, and alternate ones (BLE radios) - they all cost more. Our build system and much of our code supports, at least in part some of these platforms.</p>
+
+<p>We've taken the CC253, added a 32MHz crystal and a handfull of capacitors, a resistor, and a PCB folded dipole and used this basic circuit in a half dozen different designs. The first design we're going to make commercially available will be a development prototyping board - something that can be used to develop your own systems.</p>
+
+<h3>Programmers</h3>
+
+<p>One downside of our CPU choice is that it requires a non-standard CPU programming system (ie it's not JTAG), we've produced a family of such systems and are releasing ia really cheap one for general use. An even cheaper one will be released as soon as possible.</p>
+
+<p>Our programmers can be used as simple USB serial interfaces to talk to our protyping board, for debug or as an interface, when they are not being used programming.</p> 
+
+<h3>Internet Gateway</h3>
+
+<p>Building a network of sensors that don't connect to the wider world is pretty useless, we're releasing a set of firmware for our prototyping board that, together with a USB serial interface (either our programming board or a stock FTDI cable) and a user-space RPC library, allows you to power the development board from USB and use it to send and receive data to your network. As an added bonus you can use it as a packet sniffer.</p> 
+
+<h3>Software Update Over The Air</h3>
+
+<p>Putting 100 little sensors around your warehouse, or in our case in a patch of forest is a bit of a problem if you suddenly decide you find a bug, or need a new feature, and need to change the firmware running in them all - now you have to go out and find them, attach a programmer and load new code into each of them</p>
+
+<p>Software Update Over The Air (SUOTA) allows us to push new code through our internet gateway to one board, and have that board update other boards around it, even those out of range of the gateway, letting new code ripple out to all the boards in the network as they connect to each other.</p>
+
+<a name="hardware"><h2>Hardware Platforms</h2></a>
+<h3>Development Boards</h3>
+<h3>Other Boards</h3>
+<h3>Programmers</h3>
+<a name="starting"><h2>Getting Started</h2></a>
+<p>We have a <a href=gettingstarted.html">Getting Started</a> page it includes:</p>
+<ul>
+<li><a href=gettingstarted.html#intro">Introduction</a>
+<li><a href=gettingstarted.html#download">Downloading a Build System</a>
+<li><a href=gettingstarted.html#source">Downloading Starting Source</a>
+<li><a href=gettingstarted.html#build">Choosing a Build Model</a>
+<li><a href=gettingstarted.html#kernel">Building a Kernel</a>
+<li><a href=gettingstarted.html#load">Loading a Kernel</a>
+<li><a href=gettingstarted.html#serial">Setting up a Serial Gateway</a>
+<li><a href=gettingstarted.html#app">Building and loading a SUOTA App</a>
+</ul>
+<a name="programming"><h2>Programming</h2></a>
+<p>We have a <a href=programming.html">Programming</a> page it includes:</p>
+<ul>
+<li><a href="programming.html#api">Application API</a>
+	<ul>
+	<li><a href="programming.html#tasks">Tasks and timers</a>
+	<li><a href="programming.html#apps">Applications</a>
+	<li><a href="programming.html#rf">Sending/receiving packets</a>
+	<li><a href="programming.html#encryption">Encryption</a>
+	<li><a href="programming.html#suota">Software Update</a>
+	<li><a href="programming.html#interrupts">Interrupts</a>
+	<li><a href="programming.html#serial">Serial Debug</a>
+	<li><a href="programming.html#gpios">GPIOs</a>
+	<li><a href="programming.html#drivers">Drivers</a>
+	</ul>
+<li><a href="programming.html#mem">Memory organisation</a>
+<li><a href="programming.html#compiler">Compiler Issues</a>
+<li><a href="programming.html#build">Build system</a>
+<li><a href="programming.html#sa">Standalone applications</a>
+<li><a href="programming.html#net">Internet access</a>
+</ul>
+<a name="purchase"><h2>Purchase</h2></a>
+
+<p>We're still in the alpha testing process, we don't have boards available for sale at this date, most are still hand-built, but please feel free to make a case for a dev system - drop <a mailto="paul@taniwha.com">Paul</a> a note</p>
+
+<a name="license"><h2>Licenses</h2></a>
+
+<p>Check out the various Github repositories for their various licenses - as a rule software is LGPLed while hardware is GPLed</p>
+
+<a name="downloads"><h2>Downloads</h2></a>
+
+<ul>
+<li>Source code for our 8051 kernel and sample apps: <a href="https://github.com/MoonbaseOtago/CC-System">https://github.com/MoonbaseOtago/CC-System</a> (not currently accessable - released soon)
+<li>Source code for the Qt based GUI App for controlling the device programmer: <a href="https://github.com/MoonbaseOtago/CCLoad">https://github.com/MoonbaseOtago/CCLoad</a>
+<li>Source code for the firmware running on the Atmel based device programmers: <a href="https://github.com/MoonbaseOtago/HBase">https://github.com/MoonbaseOtago/HBase</a>
+<li>SDCC source we've built our system with: <a href="http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz">http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz</a>
+<li> (to come links to eagle files for hardware)
+</ul>
+
+<a name="links"><h2>Links</h2></a>
+
+<ul>
+<li>CC2533 - <a href="http://www.ti.com/product/cc2533">http://www.ti.com/product/cc2533</a>
+<ul>
+<li><a href="http://www.ti.com/general/docs/lit/getliterature.tsp?genericPartNumber=cc2533&fileType=pdf">Data sheet</a> - CC2533 specific stuff
+<li><a href="http://www.ti.com/general/docs/lit/getliterature.tsp?literatureNumber=swru191d&fileType=pdf">User Guide</a> - main documentation source for programming the CC25xx family
+</ul>
+<li>SDCC - <a href="http://sdcc.sourceforge.net/">http://sdcc.sourceforge.net/</a>
+</ul>
+
+<a name="credits"><h2>Credits</h2></a>
+
+<p>No one does this alone, the great thing about open source is that we all get to stand on the shoulders of giants</p>
+<ul>
+<li>We use the <a href="http://sdcc.sourceforge.net/">SDCC</a> 8051 C compiler, assembler and linker - many thanks.
+<li>The USB to serial portion of the USB programmer/serial dongle was copied from the excellent <a href="http://dorkbotpdx.org/wiki/duce">Benito</a> project - thanks for sharing!
+<li>something about the C# code we used to make the loader GUI from
+</ul>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Getting Started</title>
+<meta name="author" content="Paul Campbell" >
+<meta name="date" content="2013-09-26T23:20:45+1200" >
+<meta name="copyright" content="Paul Campbell">
+<meta name="keywords" content="">
+<meta name="description" content="">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8">
+<meta http-equiv="content-style-type" content="text/css">
+<meta http-equiv="expires" content="0">
+</head>
+<body>
+<h1>Getting Started</h1>
+<h2>Change list</h2>
+<ul>
+<li>24 Aug 2013 - Created
+</ul>
+<h2>Contents</h2>
+<ul>
+<li><a href="#intro">Introduction</a>
+<li><a href="#download">Downloading a Build System</a>
+<li><a href="#source">Downloading Starting Source</a>
+<li><a href="#build">Choosing a Build Model</a>
+<li><a href="#kernel">Building a Kernel</a>
+<li><a href="#load">Loading a Kernel</a>
+<li><a href=#serial">Setting up a Serial Gateway</a>
+</ul>
+
+<a name="intro"><h2>Introduction</h2></a>
+
+<p>Here we try and walk you through loading a development system, compiling a simple kernel and SUOTA loaded application, loading and running them.</p>
+
+<p>Here we assume you have in your posession two development boards and one programmer. We're going to build something like the following (but with one RF node). Then we're going to load an application into one of the nodes over RF, then upgrade it to a later version.</p>
+
+<img src="d1.png" width="600">
+
+
+<a name="download"><h2>Downloading a build system</h2></a>
+
+<p>We use <a href="http://sdcc.sourceforge.net/">SDCC</a> as a build system - we provide a copy of the source we build from under Linux at <a href="http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz">http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz</a>. This version adds an extra machine specific include file for the cc2533 and some minor tweaks to enable use of the second data pointer register.</p>
+
+<ul>
+<li>Linux: for linux users unpack this file, a simple "make install" from the top level may be all you need to do. If run into problems try "make clean;make install". Make sure that sdcc is included in your PATH (/usr/local/bin)
+<li>Macs: we have no specific mac instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
+<li>Windows: we have no specific windows instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
+</ul>
+
+<a name="source"><h2>Downloading starting source</h2></a>
+
+<p>Our source is stored on GitHub at <a href="https://github.com/MoonbaseOtago/CC-System">https://github.com/MoonbaseOtago/CC-System</a> grab a copy and install the source tree on your system.</p>
+
+<p>Edit the Makefile at the top level and change SDCC_INSTALL_DIR to point to wherever you installed your sdcc libraries during the previous step</p> 
+
+<a name="build"><h2>Choosing a Build Model</h2></a>
+
+<p>We support two build models, either a kernel plus downloadable applications, or an integrated kernel and application - we'll build both types of application in this walk through</p>
+
+<p>Generally you would choose to build an integrated application if you don't need software upgrade and/or you want to build a larger application. You might also build an integrated app while you are developing your kernel - once you've frozen it and deployed it to your various hardware nodes you switch to pushing your app in SUOTA form</p>
+
+<a name="kernel"><h2>Building a Kernel</h2></a>
+
+<p>At the top level of the source tree type "make kernel.ihx" - the system should build a default kernel.</p>
+
+<p>This builds a kernel that uses a well known crypto key for SUOTA - it's not particularly secret - come back here and create your own secret key later by editing the SUOTA_KEY variable in the Makefile, and the contents of the file kernel/suota_key.c, then type "make clean;make"</p>
+
+<a name="gui"><h2>Building the Programmer GUI App</h2></a>
+
+<p>You next need to download and build the GUI app for programming grab a copy from GitHub: <a href="https://github.com/MoonbaseOtago/CCLoad">https://github.com/MoonbaseOtago/CCLoad</a></p>
+
+<p>Building this app needs C++ and the QT4 libraries.</p>
+
+<ul>
+<li>Linux: simply type "make" at the top level
+<li>Macs: we have no specific mac instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
+<li>Windows: we have no specific windows instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
+</ul>
+
+<p>Run the app from src/ccload, it's usefull to run it from a shell as it will log any characters a development board sends on its serial port</p>
+
+<p>You should see something like:</p>
+<a href-"s1.png"><img src="s1.png" width="800"></a>
+
+<p>Now attach an 6-pin programming cable to your programmer and plug the other end into the programming connector of the first development board, make sure that pin 1 on one board is wired to pin one of the other board.</p>
+
+<p>Plug the board into your computer and determine which device it's attached to:</p>
+<ul>
+<li>Linux: type 'dmesg' to see which serial device was allocated to you - if you have no other devices connected chances are it will be /dev/ttyACM0 - it will have a similar name (might be ttyACM1, ttyACM2, etc)
+<li>Mac: ???
+<li>Windows: ???
+</ul>
+
+<p>Type the name of the device you want to use into the "Serial" text box half way down the panel on the left hand side - the program will remember it next time. Press the "Connect" button, you should see the panel change to look like the following panel, if the name on the button doesn't change to 'Disconnect' it hasn't found the device, you may have typed the wrong device name.</p>
+
+<a href-"s2.png"><img src="s2.png" width="800"></a>
+
+<p>Note the 'Connect' button has changed to 'Disconnect', the 'Chip' panel in the top right contains information about the chip found on the development board, the CC Status Byte tells you the development system's current state</p>
+
+<p>Now's a good time to set up automatic MAC generation - check the "Write MAC" box, next to it are 2 text boxes put 8 hex digits into each box, check the "AutoincMAC" box, now every time you write a kernel it will get a unique MAC address assigned to the board. How should you find a unique MAC address to use - I steal one from an existing device that works in another domain: ethernet or wifi - put the first 8 hex digits of your laptop's ethernet mac address into the left hand box, and the last 4 hex digits, followed by "0000" into the right hand box.</p>
+
+<a name="load"><h2>Loading a Kernel</h2></a>
+
+<p>Press the "Select File" button, it will pop up a file open dialog box, navigate to the place you built the kernel and choose the kernel.ihx file. The press the "load" button to load the kernel into the GUI program - it will look like:</p>
+<a href-"s3.png"><img src="s3.png" width="800"></a>
+<p>Note that for a kernel the "Start:" is 0x0 and the "End:" is less than 0x2000 (the limit of the space we assign for kernels).</p>
+
+<p>Next press "Erase Chip" to delete any already loaded applications and "Write" to copy the kernel image into the development board - normally we don't check "Verify After Write", it takes too long, only use it if you suspect a problem.</p>
+
+<a href-"s4.png"><img src="s4.png" width="800"></a>
+<a name="serial"><h2>Setting up a Serial Gateway</h2></a>
+
+<p>Build the serial standalone app in the sources directory by typing "make serial.ihx".</p>
+
+<p>Press "Disconnect" on the programming app, or quit from it. Remove the development board you just programmed and set it aside. Plug in the second board. Start the app and "Connect".</p>
+
+<p>Press "Select File" and navigate to the serial.ihx you just build. Press "Load" to load it into the GUI app, and "Write" to write it into the second development board this will be your serial gateway. Press "Run" and "Disconnect" the programming GUI.</p>
+
+<p>Now you need to solve a problem - you need to power your serial gateway while you use it - you have 4 options:</p>
+<ul>
+<li>Use the programmer as a serial connection and power source  - install a 3x2 pin header at the serial location on the board, install the 2-pin SV header and put a jumper on it, install the 6-pin header the same way around as the programmer
+<li>Use a 3.3v (important) FTDI cable as a serial connection and power source - install a 6x1 pin header at the serial location on the board, install the 2-pin SV header and put a jumper on it - plug the FTDI cable in the right way around put the black pin near the on-board crystal and the green one near the jumper
+<li>You can provide an external 3v power supply to the board and use either a programmer board in the serial position, or an FTDI cable - in this case leave the jumper off
+<li>You can install a programmer to power (and program) the board in the programming location while also using either a second programmer or an FTDI cable - in this case leave the jumper off
+</ul>
+
+<p>WARNING: be carefull to not short the various power supplies here together - leave off the SV jumper if you use either of the serial connections AND either a programmer, or an xternal power supply. For similar reasons don't use the FTDI serial position and the programmer serial position at the same time.</p>
+
+<p>Type "make packet_loader" to build the serial gateway app.</p>
+
+<p>Windows/Mac users - if you ported this and have feedback/change you can push back would you please drop us a note.</p>
+
+<p>Next run it passing the name of your serial interface - it will open the device and print a help message:</p>
+
+<pre>
+./packet_loader /dev/ttyACM0
+a: autodump
+A: autodump, raw and promiscuous
+c: set rf channel 11-26             - c channel
+h: help
+i: initialise file
+m: set mac                          - m a:b:c:d:e:f:g
+K: load key (16 hex bytes)          - K key-num value 
+O: receiver on
+o: receiver off
+p: ping
+P: set promiscuous (snoops any packet)
+r: set raw - dumps all received pckets
+R: reset remote board
+s: send a broadcast packet          - s * cmd count
+s: send a directed packet           - s a:b:c:d:e:f:g cmd count
+!: send a broadcast crypto packet   - ! key-num * cmd count
+!: send a directed crypto packet    - ! key-num a:b:c:d:e:f:g cmd count
+U: rpt snd packet every N secs      - U secs key-num arch code_base version
+u: suota update listener            - u arch code_base version file
+q: quit
+&gt;
+</pre> 
+
+<p>Test connectivity with the 'p' command (ping), if everything's connected OK it will respond with:
+<pre>
+
+ PRINT: PING
+
+</pre>
+
+<a name="app"><h2>Building and loading a SUOTA App</h2></a>
+
+<p>We have a simple test app, you can build multiple SUOTA versions (2 through 5) of it with "make suota_test", that builds 4 different versions, each flashes the LED at a different rate</p>
+
+<p>Find a power supply for that first board, the one you put the kernel in - 3V from a battery, a programmer, or an FTDI cable (as described above).</p>
+
+<p>Load version 2 by entering the following command into the running packet_loader app to run a script that sets up the packet loader to advertise which code versions are available and which files contain the appropriate code</p>
+
+<pre>
+
+i suota_test/sload2
+
+</pre>
+
+<p>After a while the LED on the first broard should start flashing, the code has been loaded over the air from the serial gateway. Try pushing a newer version, enter:</p>
+
+<pre>
+
+i suota_test/sload3
+
+</pre>
+
+<p>This will trigger a new update, after a while the LED will start flashing a little slower</p>
+
+<p>You can continue with versions 4 and 5. To reset the board and reload them again you need to load the kernel back into the board from the GUI, make sure to first do an "Erase Chip" to trash the apps</p>
+
+</body>
+</html>
