@@ -33,7 +33,7 @@
 
 <p>Here we try and walk you through loading a development system, compiling a simple kernel and SUOTA loaded application, loading and running them.</p>
 
-<p>Here we assume you have in your posession two development boards and one programmer. We're going to build something like the following (but with one RF node). Then we're going to load an application into one of the nodes over RF, then upgrade it to a later version.</p>
+<p>Here we assume you have in your possession two development boards and one programmer. We're going to build something like the following (but with one RF node). Then we're going to load an application into one of the nodes over RF, then upgrade it to a later version.</p>
 
 <img src="d1.png" width="600">
 
@@ -78,7 +78,7 @@
 <li>Windows: we have no specific windows instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
 </ul>
 
-<p>Run the app from src/ccload, it's usefull to run it from a shell as it will log any characters a development board sends on its serial port</p>
+<p>Run the app from src/ccload, it's useful to run it from a shell as it will log any characters a development board sends on its serial port</p>
 
 <p>You should see something like:</p>
 <a href-"s1.png"><img src="s1.png" width="800"></a>
@@ -125,7 +125,7 @@
 <li>You can install a programmer to power (and program) the board in the programming location while also using either a second programmer or an FTDI cable - in this case leave the jumper off
 </ul>
 
-<p>WARNING: be carefull to not short the various power supplies here together - leave off the SV jumper if you use either of the serial connections AND either a programmer, or an xternal power supply. For similar reasons don't use the FTDI serial position and the programmer serial position at the same time.</p>
+<p>WARNING: be careful to not short the various power supplies here together - leave off the SV jumper if you use either of the serial connections AND either a programmer, or an eternal power supply. For similar reasons don't use the FTDI serial position and the programmer serial position at the same time.</p>
 
 <p>Type "make packet_loader" to build the serial gateway app.</p>
 
@@ -179,7 +179,7 @@ i suota_test/sload2
 
 </pre>
 
-<p>After a while the LED on the first broard should start flashing, the code has been loaded over the air from the serial gateway. Try pushing a newer version, enter:</p>
+<p>After a while the LED on the first board should start flashing, the code has been loaded over the air from the serial gateway. Try pushing a newer version, enter:</p>
 
 <pre>
 

@@ -47,11 +47,11 @@
 
 <h3>Overview</h3>
 
-<p>This project started out with an attempt to make a really cheap RF platform for a Burning Man art project (to come) - with a $5-10 goal there weren't a lot of chips available to us - we chose the Texas Instruments (TI) <a href="http://www.ti.com/product/cc2533">CC2533</a> - it's cheap, can be built with a minimal component count and we can program it to update its software in the field. The CC2533 sends and receives 802.15.4 packets at 2.4GHz, there's hardware support for AES-128 encryption, an 8051 CPU and the usual collection of SoC devices uarts/spu/i2c/gpios/timers etc. This is the same protocol that Zigbee runs on top of - we're not explicitly using Zigbee protocols (but not precluding them), we're providing MAC level packet delivery, the rest is up to you.</p>
+<p>This project started out with an attempt to make a really cheap RF platform for a Burning Man art project (to come) - with a $5-10 goal there weren't a lot of chips available to us - we chose the Texas Instruments (TI) <a href="http://www.ti.com/product/cc2533">CC2533</a> - it's cheap, can be built with a minimal component count and we can program it to update its software in the field. The CC2533 sends and receives 802.15.4 packets at 2.4GHz, there's hardware support for AES-128 encryption, an 8051 CPU and the usual collection of SoC devices uarts/spi/i2c/gpios/timers etc. This is the same protocol that Zigbee runs on top of - we're not explicitly using Zigbee protocols (but not precluding them), we're providing MAC level packet delivery, the rest is up to you.</p>
 
-<p>Another issue is that GCC doesn't support 8051 CPUs, TI's sample code for programming the chip is only provided for a proprietary for-profit C compiler - we've produced our own set of RF libraries, and incorporated them into a minimalist OS. It includes encrytpion, timers, power control and software update over the air.</p>
+<p>Another issue is that GCC doesn't support 8051 CPUs, TI's sample code for programming the chip is only provided for a proprietary for-profit C compiler - we've produced our own set of RF libraries, and incorporated them into a minimalist OS. It includes encryption, timers, power control and software update over the air.</p>
 
-<p>The result is a well-supported platform for cheap sensors, part of the much vaunted "internet ofi things", something you can build today.</p>
+<p>The result is a well-supported platform for cheap sensors, part of the much vaunted "internet of things", something you can build today.</p>
 
 <h3>Basic Platform</h3>
 
@@ -63,7 +63,7 @@
 <li>256 bytes - fast sram
 <li>3.75k - sram
 <li>802.15.4 - radio
-<li>AES-128 - encription engine
+<li>AES-128 - encryption engine
 <li>2 - uart/spis
 <li>19 - GPIOs
 <li>4 - timers
@@ -75,13 +75,13 @@
 
 <p>The CC2533 comes in larger models (64k and 96k), and there are other devices in the CC25xx family with extra (USB, ADC) features, and alternate ones (BLE radios) - they all cost more. Our build system and much of our code supports, at least in part some of these platforms.</p>
 
-<p>We've taken the CC253, added a 32MHz crystal and a handfull of capacitors, a resistor, and a PCB folded dipole and used this basic circuit in a half dozen different designs. The first design we're going to make commercially available will be a development prototyping board - something that can be used to develop your own systems.</p>
+<p>We've taken the CC253, added a 32MHz crystal and a handful of capacitors, a resistor, and a PCB folded dipole and used this basic circuit in a half dozen different designs. The first design we're going to make commercially available will be a development prototyping board - something that can be used to develop your own systems.</p>
 
 <h3>Programmers</h3>
 
-<p>One downside of our CPU choice is that it requires a non-standard CPU programming system (ie it's not JTAG), we've produced a family of such systems and are releasing ia really cheap one for general use. An even cheaper one will be released as soon as possible.</p>
+<p>One downside of our CPU choice is that it requires a non-standard CPU programming system (ie it's not JTAG), we've produced a family of such systems and are releasing a really cheap one for general use. An even cheaper one will be released as soon as possible.</p>
 
-<p>Our programmers can be used as simple USB serial interfaces to talk to our protyping board, for debug or as an interface, when they are not being used programming.</p> 
+<p>Our programmers can be used as simple USB serial interfaces to talk to our prototyping board, for debug or as an interface, when they are not being used programming.</p> 
 
 <h3>Internet Gateway</h3>
 
@@ -132,7 +132,7 @@
 </ul>
 <a name="purchase"><h2>Purchase</h2></a>
 
-<p>We're still in the alpha testing process, we don't have boards available for sale at this date, most are still hand-built, but please feel free to make a case for a dev system - drop <a mailto="paul@taniwha.com">Paul</a> a note</p>
+<p>We're still in the alpha testing process, we don't have boards available for sale at this date, most are still hand-built, but please feel free to make a case for a dev system - drop <a href="mailto:paul@taniwha.com">Paul</a> a note</p>
 
 <a name="license"><h2>Licenses</h2></a>
 
@@ -141,7 +141,7 @@
 <a name="downloads"><h2>Downloads</h2></a>
 
 <ul>
-<li>Source code for our 8051 kernel and sample apps: <a href="https://github.com/MoonbaseOtago/CC-System">https://github.com/MoonbaseOtago/CC-System</a> (not currently accessable - released soon)
+<li>Source code for our 8051 kernel and sample apps: <a href="https://github.com/MoonbaseOtago/CC-System">https://github.com/MoonbaseOtago/CC-System</a> (not currently accessible - released soon)
 <li>Source code for the Qt based GUI App for controlling the device programmer: <a href="https://github.com/MoonbaseOtago/CCLoad">https://github.com/MoonbaseOtago/CCLoad</a>
 <li>Source code for the firmware running on the Atmel based device programmers: <a href="https://github.com/MoonbaseOtago/HBase">https://github.com/MoonbaseOtago/HBase</a>
 <li>SDCC source we've built our system with: <a href="http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz">http://moonbaseotago.com/cheaprf/sdcc-2533.tar.gz</a>
@@ -165,7 +165,7 @@
 <ul>
 <li>We use the <a href="http://sdcc.sourceforge.net/">SDCC</a> 8051 C compiler, assembler and linker - many thanks.
 <li>The USB to serial portion of the USB programmer/serial dongle was copied from the excellent <a href="http://dorkbotpdx.org/wiki/duce">Benito</a> project - thanks for sharing!
-<li>something about the C# code we used to make the loader GUI from
+<li>We based our programming GUI loosely on CC.Flash from <a href="https://github.com/x893/CC.Flash">https://github.com/x893/CC.Flash</a> - thanks
 </ul>
 </body>
 </html>

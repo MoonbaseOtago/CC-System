@@ -75,13 +75,13 @@ some task queue bookkeeping (these should be initialised to 0) - create a task w
 
 </pre>
 
-<p>A common thing to do is to call queue_task() with a 0 timeout which means call it asap (actually it goes after all the other tasks about to be called). We have a short cut for that queue_task_0(&amp;task_block) which also solves the problem of making calling it from interrupts safely (and SDCC's static storage of call arguments)</p>
+<p>A common thing to do is to call queue_task() with a 0 timeout which means call it ASAP (actually it goes after all the other tasks about to be called). We have a short cut for that queue_task_0(&amp;task_block) which also solves the problem of making calling it from interrupts safely (and SDCC's static storage of call arguments)</p>
 
 <p>Task callback routines are called with the task block that was called out as a parameter - they've been removed from the list and it's quit safe (and normal) to call queue_task() on them from within a callback routine.</p>
 
 <p>A task will not be interrupted by another task (even one queued with time 0 by an interrupt). There is no preemption here, one tiny stack that has to be shared by everyone, local variables are expensive in this architecture so use global variables - a state machine kicked by app calls and task callbacks is the preferred way to go.</p>
 
-<p>You should spend minimal time in tasks, as little as possible, get in do something, get out asap, don't spin to delay time, queue another task instead.</p>
+<p>You should spend minimal time in tasks, as little as possible, get in do something, get out ASAP, don't spin to delay time, queue another task instead.</p>
 
 <a name="apps"><h3>Applications</h3></a>
 
@@ -311,13 +311,13 @@ to stop multiple retransmission of broadcast packets.</p>
 
 <p>Global variables carry information about the incoming packet <b>rx_packet</b> points to the data payload, <b>rx_len</b> is its length. If <b>rx_broadcast</b> is set it was a broadcast packet. <b>rx_mac</b> points to the 8 byte mac address of the sending system. If <b>rx_crypto</b> was set then the packet was encrypted with the key given in <b>rtx_key</b>.</p>
 
-<p>The standard kernel load has some unused space in the low interrupt vectors, we sneak a node specific 4 bytes at address 0x000e and another 4 at 0x0016 - this is a default value - it can be overriden by an application at any time - in particular when an <b>APP_GET_MAC</b> event is received. The code loader GUI program has a feature that can be used to generate unique MAC addresses by patching these bytes in kernels as they are written to new hardware.</p>
+<p>The standard kernel load has some unused space in the low interrupt vectors, we sneak a node specific 4 bytes at address 0x000e and another 4 at 0x0016 - this is a default value - it can be overridden by an application at any time - in particular when an <b>APP_GET_MAC</b> event is received. The code loader GUI program has a feature that can be used to generate unique MAC addresses by patching these bytes in kernels as they are written to new hardware.</p>
 
 <a name="encryption"><h3>Encryption</h3></a>
 
 <p>Our hardware implements AES-128, it uses 16-byte keys</p>
 
-<p>Encryption is optional, but there's more to in than just keeping secrets - the crypto sum used on each packet provides a far better protection than the usualy CRC32. Packets are discarded if received with bad crypto, you'll never see them - that means that two networks can happily share the same RF frequency if they use different crypto keys</p>
+<p>Encryption is optional, but there's more to in than just keeping secrets - the crypto sum used on each packet provides a far better protection than the usually CRC32. Packets are discarded if received with bad crypto, you'll never see them - that means that two networks can happily share the same RF frequency if they use different crypto keys</p>
 
 <h4>Key Management</h4>
 
@@ -339,27 +339,27 @@ to stop multiple retransmission of broadcast packets.</p>
 <li>Systems running standalone apps never SUOTA.
 <li>Naked kernels (a system with a kernel and no loaded app) will update to any visible application with the same <b>type</b> (the same type of hardware)
 <li>If the global variable <b>suota_allow_any_code</b> is set then the application will update to any visible application with the same <b>type</b> (the same type of hardware) - this is the case where you want to allow the switch of the board to another app
-<li>If the global variable <b>suota_allow_any_code</b> is clear (the default) the application will update only to another application with the same <b>type</b> and the same <b>code_base</b> and a larger <b>version</b> - this is the usualy SUOTA update case
+<li>If the global variable <b>suota_allow_any_code</b> is clear (the default) the application will update only to another application with the same <b>type</b> and the same <b>code_base</b> and a larger <b>version</b> - this is the usually SUOTA update case
 </ul>
 
 <p>At system startup if a valid SUOTA application is already loaded <b>suota_enabled</b> is cleared - if you want SUOTA for you app you must explicitly set <b>suota_enabled</b> when you handle an <b>APP_INIT</b> or <b>APP_SUOTA_DONE</b> event.</p>
 
 <h4>SUOTA encryption</h4>
-<p>For both reliability and security reasons all SUOTA traffic is encrypted - actual SUOTA traffic uses a specific SUOTA key with a key index outside the normal 0x00-0x7f range - kernels are compiled with a specific SUOTA key - you can change this default by editing kernel/suota_key.c. Applications can override the default SUOTA key by setting the global variable <b>suota_key_required</b> - if this is set applications will receive an <b>APP_GET_SUOTA_KEY</b> event snad should load their bespoke SUOTA key with <b>rf_set_key()</b> or <b>rf_set_key_c()</b></p>
+<p>For both reliability and security reasons all SUOTA traffic is encrypted - actual SUOTA traffic uses a specific SUOTA key with a key index outside the normal 0x00-0x7f range - kernels are compiled with a specific SUOTA key - you can change this default by editing kernel/suota_key.c. Applications can override the default SUOTA key by setting the global variable <b>suota_key_required</b> - if this is set applications will receive an <b>APP_GET_SUOTA_KEY</b> event and should load their bespoke SUOTA key with <b>rf_set_key()</b> or <b>rf_set_key_c()</b></p>
 
 <h4>Application images</h4>
 <p>We reserve space for two copies of applications, that limits sizes - but we don't have enough RAM available to hold an image of a new application while upgrading to a new application, instead we place the non-changing kernel in low flash memory and split the rest (on flash page boundaries)  between the current app and the next (or currently) updating one</p>
 
 <p>The 8051 is an old CPU design, in particular it has no long distance relative branch or subroutine call instructions - this means that code must be compiled to load at a specific base address - by convention we build applications with even numbered version to load at one address, and odd numbered addresses at another - under normal behaviour, switching from code of one version to the next one, new code is loaded 
-nto the correct place. But the world isn't perfect, sometimes a node may miss an update becouse it moved out of range - we support upgrading from even numbered versions to even numbered ones and odd numbered to odd ones - it's slightly less reliable than a simple update, involves 2 flash copies and requires more system resources (2 1k xdata buffers).</p>
+into the correct place. But the world isn't perfect, sometimes a node may miss an update because it moved out of range - we support upgrading from even numbered versions to even numbered ones and odd numbered to odd ones - it's slightly less reliable than a simple update, involves 2 flash copies and requires more system resources (2 1k xdata buffers).</p>
 
-<p>The last thing we want is to turn a board into a brick with a failed application load, the SUOTA code is  pretty paranoid, it will give up if it thinks something bad has happened - the only truely unrecoverable error that can occur is when the internal 8051 flash has failed, or if we're doing the copy at the end of an even-&gt;even or odd-&gt;odd upgrade when power fails. When these failure happen you'll see a CPU reset and come back either with the previous application in place, or as a naked kernel that will load the next app it sees advertised.</p>
+<p>The last thing we want is to turn a board into a brick with a failed application load, the SUOTA code is  pretty paranoid, it will give up if it thinks something bad has happened - the only truly unrecoverable error that can occur is when the internal 8051 flash has failed, or if we're doing the copy at the end of an even-&gt;even or odd-&gt;odd upgrade when power fails. When these failure happen you'll see a CPU reset and come back either with the previous application in place, or as a naked kernel that will load the next app it sees advertised.</p>
 
 <p>At system startup time the kernel probes for applications - it looks for valid images, in the right place, with good CRCs, the correct header for the hardware - if it finds two it chooses the ones with the largest version number.</p>
 
 <h4>Application Continuity</h4>
 
-<p>Sometimes you want to create an upgradeable app that has persistant data - during the upgrade process when a good application image has been captured the system reaches a point where it must switch to the new application, it indicates that this is about to happen by sending an <b>APP_SUOTA_START</b> event to the application, the app returns a value encoding how it wants to handle the process:
+<p>Sometimes you want to create an upgradeable app that has persistent data - during the upgrade process when a good application image has been captured the system reaches a point where it must switch to the new application, it indicates that this is about to happen by sending an <b>APP_SUOTA_START</b> event to the application, the app returns a value encoding how it wants to handle the process:
 <ul>
 <li>bits 1:0 encode how we will continue
 	<ul>
@@ -367,7 +367,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 	<li>1: system context is cleared, all queued tasks are deleted and the new app is sent an <b>APP_INIT</b> event
 	<li>2: system context is cleared, all queued tasks are deleted and the new app is sent an <b>APP_SUOTA_DONE</b> event
 	</ul>
-<li>if but 2 is set the first 1k (the code header and the data following it) of the old app will be erased before control is transfered to the new app - put your crypto keys here and use this if you don't trust the new app you're passing control to 
+<li>if but 2 is set the first 1k (the code header and the data following it) of the old app will be erased before control is transferred to the new app - put your crypto keys here and use this if you don't trust the new app you're passing control to 
 </ul>
 
 <p>Sometimes you want to pass data from one app to a new one - in this case we provide a mechanism to squirrel away some data high in xdata sram when you receive an <b>APP_SUOTA_START</b> event and then recover it when you receive an <b>APP_SUOTA_DONE</b> event</p>
@@ -388,7 +388,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 
 <h4>Playing nicely with others</h4>
 
-<p>In order for SUOTA to work well boards must be able to receive periodic notifications of the state of neighbouring board's software versions. If your app already periodically broadcasts somethingthen you don't need to do anything special, the SUOTA info piggybacking in the packet headers will do the work for you, if it doesns't you should send periodic NULL broadcast packets when your board is awake.</p>
+<p>In order for SUOTA to work well boards must be able to receive periodic notifications of the state of neighbouring board's software versions. If your app already periodically broadcasts something then you don't need to do anything special, the SUOTA info piggybacking in the packet headers will do the work for you, if it doesn't you should send periodic NULL broadcast packets when your board is awake.</p>
 
 <a name="interrupts"><h3>Interrupts</h3></a>
 
@@ -425,7 +425,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
         <li>DPH1
 	</ul>
 <li> parameters and local variables to routines that the compiler
-        has made static (ie all of them) that you call from an interrupt youtine - we provide a
+        has made static (ie all of them) that you call from an interrupt routine - we provide a
         queue_task_0() that saves the time parameter to
         queue_task() for you and passes 0
 </ul>
@@ -485,7 +485,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 	<ul>
 	<li>fixed CPU registers
 	<li>device registers
-	<li>directly accessable bits "__bit"
+	<li>directly accessible bits "__bit"
 	<li>directly accessed memory "__data"
 	<li>the call stack
 	</ul>
@@ -521,7 +521,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 
 <p>The first parameter to a subroutine is passed through registers rather than a static memory location - single parameter subroutines tend to be faster</p>
 
-<p>SDCC also supports untyped pointers - 3 byte entities that could point to xdata, pdata, fast data or flash memory, not only are they larger but they're also much slower - some normal C library routines like memcpy() amd memset() are expensive (in space and time) because they are coded for the generic case.</p>
+<p>SDCC also supports untyped pointers - 3 byte entities that could point to xdata, pdata, fast data or flash memory, not only are they larger but they're also much slower - some normal C library routines like memcpy() and memset() are expensive (in space and time) because they are coded for the generic case.</p>
 
 <p>So always type your variables - tell the compiler where you want to put data and where pointers point to - the SDCC manual has some examples but here are some basics:
 
@@ -582,7 +582,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 <li>post process the .ihx file to make a .suota file using fixcrc which fills in the code_header structure and creates a binary file suitable for the serial loader code to broadcast for SUOTA
 </ul>
 
-<p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we reccomend that for a standalone app you build your kernel in one place and copy over the frozen kernel state, that represents the kernel you have frozen in the field to the new build environment - copy the Makefile and trim it to match - instructions on how do do this are containe din the makefile itself.</p>
+<p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we recommend that for a standalone app you build your kernel in one place and copy over the frozen kernel state, that represents the kernel you have frozen in the field to the new build environment - copy the Makefile and trim it to match - instructions on how do do this are contained in the makefile itself.</p>
 
 <a name="sa"><h2>Standalone applications</h2></a>
 
@@ -599,34 +599,34 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 
 <p>The <b>packet_loader</b> program takes one argument - the serial port that should be opened - it defaults to /dev/USB0. If you give it the <b>-i script</b> flag it will open the script file and execute commands from it (for example it could set up crypto keys and SUOTA files) then sit there forever responding to incoming packets.</p>
 
-<p>Alternatively the <b>-e suota_file</b> flag allows you to push a single copy of a new set of firmware to a network, you need to have attached the crypto key to the suota file using the <b>fix_crc -k ...</b> command during the build process - if you use the <b>-e</b> flag then you can alo use the  <b>-c channel</b> and <b>-m mac</b> flags</p>
+<p>Alternatively the <b>-e suota_file</b> flag allows you to push a single copy of a new set of firmware to a network, you need to have attached the crypto key to the suota file using the <b>fix_crc -k ...</b> command during the build process - if you use the <b>-e</b> flag then you can also use the  <b>-c channel</b> and <b>-m mac</b> flags</p>
 
 <p>If you don't give the <b>-i</b> or <b>-e</b> flags it will open an interactive session and allow you to send and receive interactive commands.</p>
 
-<p>In this API crypto keys are 16 bytes - mac addressess are 8 bytes (not the traditional 6). In the scripting interface You can optionally insert colons to delineate bytes in keys and mac addresses.</p>
+<p>In this API crypto keys are 16 bytes - mac addresses are 8 bytes (not the traditional 6). In the scripting interface You can optionally insert colons to delineate bytes in keys and mac addresses.</p>
 
-<p>The access library (include "serial/packet_interface.h") allows your host application to create multiple independant gateways (using different serial ports) by instantiating <b>rf_interface(char *port_name, rf_rcv callback)</b> objects,  the following methods are supported:<p>
+<p>The access library (include "serial/packet_interface.h") allows your host application to create multiple independent gateways (using different serial ports) by instantiating <b>rf_interface(char *port_name, rf_rcv callback)</b> objects,  the following methods are supported:<p>
 <ul>
-<li><b>opened_ok()</b>             - true if the serial port opened cleanly, call this after creatring the object, if it fails delete the object
+<li><b>opened_ok()</b>             - true if the serial port opened cleanly, call this after creating the object, if it fails delete the object
 <li><b>on()</b>                    - turns the receiver on
 <li><b>off()</b>                   - turns it off
 <li><b>ping()</b>                  - just sends a packet to see if the board is alive
-<li><b>reset()</b>                 - resets the developmenbt board
+<li><b>reset()</b>                 - resets the development board
 <li><b>set_auto_dump(FILE*)</b>    - dumps packet contents to the named output file
-<li><b>set_promiscuous(on/off)</b> - ignores mac addresses dumps all traffic seen pn a channel
+<li><b>set_promiscuous(on/off)</b> - ignores mac addresses dumps all traffic seen on a channel
 <li><b>set_raw(on/off)</b>         - ignores crypto and dumps raw packet data - caution all incoming packets stop being decrypted, SUOTA will stop
 <li><b>set_channel(chan)</b>       - sets the rf channel some value in the range 11-26
-<li><b>set_mac(unsigned char *)</b>- sets the mac addrtes (8 bytes)
+<li><b>set_mac(unsigned char *)</b>- sets the mac address (8 bytes)
 <li><b>set_key(k, unsigned char *)</b> - sets key number k (0-7) to the 16 bytes passed in
 <li><b>send(mac, data, len)</b>    - sends len bytes from data to mac (or broadcast if mac is NULL)
 <li><b>send_crypto(k, mac, data, len)</b>- same as send but encrypted with key k (0-7, must have been loaded already)
 <li><b>command(char *)</b>         - execute a single scripted command
-<li><b>initialise(char*)</b>       - run the scripts from file
-<li><b>set_suota_upload(k, a, c, v, file)</b>- server file using set_suota_versioncrypto key k for a/c/v requests - if k is NULL upload will load the key from the file (set by <b>fix_crc -k ...</b>)
+<li><b>initialised(char*)</b>       - run the scripts from file
+<li><b>set_suota_upload(k, a, c, v, file)</b>- server file using set_suota_version crypto key k for a/c/v requests - if k is NULL upload will load the key from the file (set by <b>fix_crc -k ...</b>)
 <li><b>send_repeat(secs, k, a, c, v)</b> - send a NULL packet with suota data using key k every so many secs (0 to cancel)
 </ul>
 
-<p>C bindings for all these are all available - just add <b>rf_</b> to the names above and add ain initial first parameter of type <b>rf_handle</b> - create one with <b>rf_open(char *port_name, rf_rcv callback)</b> and dispose of it with <b>rf_close(handle)</b></p>
+<p>C bindings for all these are all available - just add <b>rf_</b> to the names above and add an initial first parameter of type <b>rf_handle</b> - create one with <b>rf_open(char *port_name, rf_rcv callback)</b> and dispose of it with <b>rf_close(handle)</b></p>
 
 <p>If you specify a <b>rf_rcv</b> callback hook when you create a <b>rf_interface</b> object the callback will be called whenever an incoming packet is received - parameters are:
 <ul>
@@ -650,7 +650,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 <li>o: receiver off
 <li>p: ping
 <li>P: set promiscuous (snoops any packet) -P[+/-]
-<li>r: set raw - dumps all received pckets -r[+/-]
+<li>r: set raw - dumps all received packets -r[+/-]
 <li>s: send a broadcast packet          - s * cmd count
 <li>s: send a directed packet           - s a:b:c:d:e:f:g cmd count
 <li>!: send a broadcast crypto packet   - ! key-num * cmd count
@@ -659,9 +659,9 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 <li>U: rpt snd packet every N secs      - U N key arch code_base version
 </ul>
 
-<p>You cans use 'u' to set up a respnder daemon to push SUOTA firmware to boards, and 'U' to generate null broadcast messages to trigger updates in remote nodes</p>
+<p>You cans use 'u' to set up a responder daemon to push SUOTA firmware to boards, and 'U' to generate null broadcast messages to trigger updates in remote nodes</p>
 
-<p>In addition when you use the <b>packet_loader</b> host app interactively it supports the above acommands as well as the following commands:</p>
+<p>In addition when you use the <b>packet_loader</b> host app interactively it supports the above commands as well as the following commands:</p>
 <ul>
 <li>?: help
 <li>h: help
@@ -669,7 +669,7 @@ nto the correct place. But the world isn't perfect, sometimes a node may miss an
 <li>q: quit
 </ul>
 
-<p>You can use a board as a channel sniffer by variously enabling the autodump, promisuous, and maybe raw modes</p>
+<p>You can use a board as a channel sniffer by variously enabling the autodump, promiscuous, and maybe raw modes</p>
 
 <p>We expect programers to take the code provided and include it in a host specific gateway application. Provide a callback routine to handle packet traffic from a network and <b>send()</b> or <b>send_crypto()</b> to send it. Use the <b>initialise()</b> method to load keys/mac addresses/channels from script files, and also potentially to set up SUOTA (see the examples in the suota_test directory) to update nodes.</p>
 </body>
