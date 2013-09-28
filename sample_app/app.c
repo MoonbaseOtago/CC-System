@@ -20,6 +20,22 @@
 #include <cc2530.h>
 #include "interface.h"
 
+#define FLASH_LED
+#ifdef FLASH_LED
+#ifdef VER
+__bit led_state = 0;
+static void led_update(task __xdata * t);
+__xdata task led_task = {led_update,0,0,0};
+static void led_update(task __xdata * t)
+{
+	led_state = !led_state;
+	P2_0 = led_state;
+	queue_task(&led_task, VER*HZ/3);
+}
+#endif
+#endif
+
+
 __xdata unsigned char mac[] = {0x84, 0x2b, 0x2b, 0x83, 0xaa, 0x07, 0x55, 0xaa};	// paul's laptop ether - will never xmit on wireless - expanded to 8 bytes
 __code unsigned char ckey[] = {0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,	// 16 byte crypto key - will change
 			       0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf};
@@ -67,6 +83,16 @@ unsigned char my_app(unsigned char op)
 						// we need to set up a regular null broadcast
 						// the rf subsystem will fill in all the interesting
 						// bits in the packet header
+
+#ifdef FLASH_LED
+#ifdef VER
+		P2DIR |= 1<<0;
+		P2INP |= 1<<0;
+`
+		P2_0 = led_state;
+		queue_task(&led_task, VER*HZ/3);
+#endif
+#endif
 		break;
 	case APP_GET_MAC:
 		//rf_set_mac(&mac[0]);		// do this to set the mac

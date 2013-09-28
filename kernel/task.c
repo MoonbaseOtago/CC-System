@@ -16,6 +16,7 @@
 // License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 //
 
+//#define TDEBUG
 //#define XMT
 #include <mcs51reg.h>
 #include <cc2530.h>
@@ -307,6 +308,7 @@ void sleep_isr()  __interrupt(5) __naked
 {
 	__asm;
 	clr	_STIE
+	clr	_STIF
 	mov	_enter_sleep_mod_flag, #0
 	reti
 	__endasm;
@@ -387,7 +389,6 @@ puthex(unsigned char v)	__naked
 
 void dump_wait_list(char __code *cp) __naked
 {
-//#define TDEBUG
 #ifdef TDEBUG
 	__asm;
 	lcall	_putstr
@@ -502,10 +503,10 @@ void queue_task_0(task __xdata * t) __naked	// for ISRs - save param so we don't
 	clr	a
 	movx	@r0, a
 	acall	_queue_task
-	mov	r0, #_queue_task_PARM_2	
+	mov	r0, #_queue_task_PARM_2+1	
 	pop	ACC
 	movx	@r0, a
-	inc	r0
+	dec	r0
 	pop	ACC
 	movx	@r0, a
 	ret
@@ -537,9 +538,22 @@ sjmp 0101$
 	lcall	_puthex
 	pop	dpl
 	lcall	_puthex
+	mov	dpl, #' '
+	lcall	_putchar
 	pop	dpl
 	lcall	_puthex
 	pop	dpl
+	lcall	_puthex
+
+	mov	dpl, #' '
+	lcall	_putchar
+	mov	r0, #_queue_task_PARM_2+1
+	movx	a, @r0
+	mov	dpl, a
+	lcall	_puthex
+	mov	r0, #_queue_task_PARM_2
+	movx	a, @r0
+	mov	dpl, a
 	lcall	_puthex
 	mov	dptr, #0103$
 	lcall	_dump_wait_list
@@ -1332,7 +1346,7 @@ m_9a:
 			ajmp	distribute
 m_8:
 #ifdef TDEBUG
-		//lcall	xlog5
+	//	lcall	xlog5
 #endif
 		mov	a, _waitq	// if (!waitq) {
 		orl	a, _waitq+1
@@ -1353,9 +1367,9 @@ m_8a:
 
 m_10:					//	} else {
 #ifdef TDEBUG
-//        mov     a, _ST0
-//	push	_ST1
- //       mov     dpl, _ST2
+        mov     a, _ST0
+	push	_ST1
+        push    _ST2
 //	lcall _puthex
 //	pop	dpl
 //	lcall _puthex
@@ -1372,6 +1386,11 @@ m_10:					//	} else {
 			movx	a, @dptr
 			cjne	a, #0, m_11
 			cjne	r0, #0, m_11
+#ifdef TDEBUG
+pop ACC
+pop ACC
+#endif
+
 				mov	r6, #0	//		delta = 0;
 				mov	r7, #0
 				ljmp	m_1
@@ -1390,22 +1409,29 @@ m_11a:				clr	EA	//		EA = 0;
 				lcall	_stop_timer	//	delta = stop_timer();
 				mov	r6, dpl
 				mov	r7, dph
-//       mov     a, _ST0
-//	push	_ST1
-//      mov     dpl, _ST2
-//	lcall _puthex
-//	pop	dpl
-//	lcall _puthex
-//	mov	dpl, r7
-//	lcall _puthex
-//	mov	dpl, r6
-//	lcall _puthex
-//	mov	dpl, _last+1
-//	lcall _puthex
-//	mov	dpl, _last
-//	lcall _puthex
-//	mov	dptr,#317$
-//	lcall	_putstr
+#ifdef TDEBUG
+       mov     a, _ST0
+	push	_ST1
+        mov     dpl, _ST2
+	lcall _puthex		// current time
+	pop	dpl
+	lcall _puthex
+
+	mov	dpl, r7		// measured delta
+	lcall _puthex
+	mov	dpl, r6
+	lcall _puthex
+	mov	dpl, _last+1	// last time when we started
+	lcall _puthex
+	mov	dpl, _last
+	lcall _puthex
+	pop	dpl		// measured same thing
+	lcall _puthex
+	pop	dpl
+	lcall _puthex
+	mov	dptr,#317$
+	lcall	_putstr
+#endif
 				ljmp	m_1		//  }
 							// }
 							//}

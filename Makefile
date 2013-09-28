@@ -16,8 +16,8 @@
 # License along with this library.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-THIS_ARCH = 1		# set this to match the kernel in your board
-THIS_CODE_BASE = 0	# set this to matchy the code base currently running in the board
+THIS_ARCH = 1		# set this to match the hardware 
+THIS_CODE_BASE = 0	# set this to match the code base currently running in the board
 THIS_VERSION = 2	# suota version
 # DRV_KEYS = 1		# define for key driver
 # DRV_LEDS = 1		# define for leds driver
@@ -228,28 +228,30 @@ clean:
 #	test code for Paul
 #
 
+SUOTA_KEY=ccb17cb57448634ce595c15acf966145
+
 suota_test:	test2_even.suota test3_odd.suota test4_even.suota test5_odd.suota
 test2_even.suota:	test2.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test2.ihx  test2.rel syms.rel app_hdr.rel
-	./fixcrc -v 2 -k ccb17cb57448634ce595c15acf966145 <test2.ihx >test2_even.suota
+	./fixcrc -v 2 -k $(SUOTA_KEY) <test2.ihx >test2_even.suota
 test2.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test2.rel -DVV="\"Test 2\n\""
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test2.rel -DVV="\"Test 2\n\"" -DVER=2
 
 test3_odd.suota:	test3.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test3.ihx  test3.rel syms.rel app_hdr.rel
-	./fixcrc -v 3 -k ccb17cb57448634ce595c15acf966145 <test3.ihx >test3_odd.suota
+	./fixcrc -v 3 -k $(SUOTA_KEY) <test3.ihx >test3_odd.suota
 test3.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test3.rel -DVV="\"Test 3\n\""
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test3.rel -DVV="\"Test 3\n\"" -DVER=3
 
 test4_even.suota:	test4.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test4.ihx  test4.rel syms.rel app_hdr.rel
-	./fixcrc -v 4 -k ccb17cb57448634ce595c15acf966145 <test4.ihx >test4_even.suota
+	./fixcrc -v 4 -k $(SUOTA_KEY) <test4.ihx >test4_even.suota
 test4.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test4.rel -DVV="\"Test 4\n\""
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test4.rel -DVV="\"Test 4\n\"" -DVER=4
 
 test5_odd.suota:	test5.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test5.ihx  test5.rel syms.rel app_hdr.rel
-	./fixcrc -v 5 -k ccb17cb57448634ce595c15acf966145 <test5.ihx >test5_odd.suota
+	./fixcrc -v 5 -k $(SUOTA_KEY) <test5.ihx >test5_odd.suota
 test5.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test5.rel -DVV="\"Test 5\n\""
+	$(CC) $(CFLAGS) -c sample_app/app.c -o test5.rel -DVV="\"Test 5\n\"" -DVER=5
 
