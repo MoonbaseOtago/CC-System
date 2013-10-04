@@ -327,6 +327,14 @@ to stop multiple retransmission of broadcast packets.</p>
 
 <p>So crypto is easy - install identical keys at both ends, implement the <b>APP_GET_KEY</b> event to set them when requested and start passing your key number(s) in the <b>crypto_key</b> parameter of <b>rf_send()</b>.</p>
 
+<p>For testing it's easy to choose a fixed, simple key, but when the time comes to build production code you need a nice random key, I use the following command to make them - for extra ramndomness seed it with some log file that changes rapidly.</p>
+
+<pre>
+
+	openssl rand -hex -rand /var/log/syslog 16
+
+</pre>
+
 <a name="suota"><h3>Software Update</h3></a>
 
 <h4>Basics</h4>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Prototyping Boards - v8.0</title>
+<meta name="author" content="Paul Campbell" >
+<meta name="date" content="2013-09-26T23:20:45+1200" >
+<meta name="copyright" content="Paul Campbell">
+<meta name="keywords" content="">
+<meta name="description" content="">
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta http-equiv="content-type" content="application/xhtml+xml; charset=UTF-8">
+<meta http-equiv="content-style-type" content="text/css">
+<meta http-equiv="expires" content="0">
+</head>
+<body>
+<h1>Prototyping Board</h1>
+<h2>Change list</h2>
+<ul>
+<li>2nd Oct 2013 - Created
+</ul>
+<h2>Contents</h2>
+<ul>
+<li><a href="#intro">Introduction</a>
+<li><a href="#programming">Programming and Debugging</a>
+<li><a href="#power">Hooking up power</a>
+<li><a href="#gateway">Building a serial gateway</a>
+<li><a href="#gpio">GPIO pinouts</a>
+<li><a href="#downloads">Downloads</a>
+</ul>
+
+<a name="intro"><h2>Introduction</h2></a>
+
+<p>Our first development board is 5cm square, because we don't know how you will use it we
+provide it with the basic surface mount parts in place but the various headers not soldered in place. There are many options here, some components are not supplied (for example if you want to power it from a USB connector you'll need to buy a USB socket and a 3V voltage regulator)
+
+<p>We expect you will almost certainly want to solder the central 3x2 programmer header in place and maybe one of the serial connectors, there are also spots for connectors compatible with Seeed's grove sensors, we include a couple of connectors.</p>
+
+<p>NOTE: this is the final prototype, the production board will have minor documentation and layout changes (and mounting holes).</p>
+
+<a href="board_dev1.png"><img src="board_dev1.png" width="800"></a>
+
+<p>Schematic and layout - click for larger images:</p>
+<a href="s1.png"><img src="s1a.png" width="800"></a>
+<a href="b1.png"><img src="b1.png" width="800"></a>
+
+<a name="programming"><h2>Programming and Debugging</h2></a>
+
+<p>The main programming/debug connector is the 3x2 pin header in the middle of the board, connect it to the programmer pin 1 to pin 1, just below it there's also a TAB-Connect connector, program it from below.</p>
+
+<a href="serial.png"><img src="serial.png"></a>
+
+<p>There are three options for serial connectors:</p>
+<ul>
+<li>the programming connector can be used as a serial out only (no input) from the CC2533 - output appears in stdout of the programmer GUI
+<li>our programmers can also be used as a USB serial connection, simply move the connector over in the same orientation as the programmer
+<li>you can also use a FTDI serial connector - ONLY use the 3v version, the 5v version will damage the board - install it with the black wire next to the crystal
+</ul>
+
+
+<a name="power"><h2>Hooking up power</h2></a>
+
+<p>There are lots of different ways to power the development board. Be careful to make sure that at any one time you are powered from one source, if you are programming disconnect any batteries, etc </p>
+
+<a href="power.png"><img src="power.png"></a>
+
+<ul>
+<li>You can install the SV jumper and power the board from a 3V FTDI cable or one of our programmer boards being used as a USB serial connector - do not install this jumper if you are powered from any other source
+<li>The programmer can be used to power the board - of you don't want to the programmer has a jumper than can be broken so that it does not provide power
+<li>There is a simple +/-3V header to wire up your own 3V source
+<li>There is room for a 7803 regulator (not provided) where you want to provide power from 5V or more
+	<ul>
+	<li>add a micro USB connector (not provided) and jumper 'U' to '+' to power the 7803 regulator from a USB connection
+	<li>Power the regulator from the '5V' header (you can use more than 5V depends on the regulator you chose) - careful some boards (like the one shown above) have the 'U' and '+' pin labels swapped - wire the external voltage to the lower of the 3 pins closest to the middle of the board.
+	</ul>
+<li>There are holes provided for a rear-mounted 3v coin cell battery holder - we've provided 3 different options for different known holders - the positive end goes up near the USB connector, the negative end down near the LED
+<li>We have pads for a TI energy harvester chip - you can power the boards from a number of different sources and charge a local battery - this is normally a purchase time option 
+</ul>
+
+
+
+<a name="gateway"><h2>Building a serial gateway</h2></a>
+
+<p>You can build a serial gateway by:</p>
+<ul>
+<li>build and program the serial gateway firmware serial.ihx as described in the <a href="../gettingstarted.html#serial">Getting Started</a> section
+<li>choose a serial connection method, either one of our programmers or a 3v FTDI cable
+<li>solder the appropriate header on the board (3x2 for our programmer, 1x6 for FTDI)
+<li>solder the SV 1x2 header on the board and install a jumper in it
+<li>plug it all in to your computer
+</ul>
+
+<a name="gpios"><h2>GPIO pinouts</h2></a>
+
+<p>CC2533s have 3 multibit ports P0, P1, and P2. P0 and P1 have 8 bits while P2 has 5 bits. Bits are denoted P0.0 .... P0.7, P1.0, ....</p>
+
+<p>Almost all the GPIOs are available for hookup on the two long 12-pin vertical lines of holes shown in the images above - you can install your own headers (not provided) in them or solder wires directly. Note pins P2.4 and P2.5 (the hardware I2C controller) are only available through PLUGH.</p>
+
+<a href="gpios.png"><img src="gpios.png"></a>
+
+<p>There are also spots available for 2mm sockets (PLUGA-PLUGH) compatible with <a href="http://www.seeedstudio.com">Seeed's</a> Grove sensors - each connector has 4 pins - power, ground and two data pins. PLUGG is special - it's powered from P1.1 a high power output pin capable of sourcing up to 20mA, this means you can power down a device when it isn't being used. They are connected:</p>
+
+<table border="1">
+<tr><td>Plug</td><td>Pin 1</td><td>Pin 2</td><td>Pin 3</td><td>Pin 4</td></tr>
+<tr><td>PLUGA</td><td>P1.5</td><td>P1.4</td><td>+3V</td><td>GND</td></tr>
+<tr><td>PLUGB</td><td>P0.3</td><td>P0.2</td><td>+3V</td><td>GND</td></tr>
+<tr><td>PLUGC</td><td>P0.1</td><td>P0.0</td><td>+3V</td><td>GND</td></tr>
+<tr><td>PLUGE</td><td>P1.2</td><td>P1.1</td><td>+3V</td><td>GND</td></tr>
+<tr><td>PLUGF</td><td>P1.5</td><td>P1.4</td><td>+3V</td><td>GND</td></tr>
+<tr><td>PLUGG</td><td>P1.7</td><td>P1.6</td><td>P1.1</td><td>GND</td></tr>
+<tr><td>PLUGH</td><td>P2.5</td><td>P2.4</td><td>+3V</td><td>GND</td></tr>
+</table>
+
+<p>Note that the 2 pins in PLUGH are the hardware I2C controller. The 2 pins in PLUGB are the serial uart0.</p>
+
+<p>In addition pin P2.0 is connected to the on-board LED - on power up it will be lit weakly through the on-chip pullups - make this port an output and write a 0 to this port to turn it off and save power, write a 1 to turn it on.</p>
+
+<p>Finally there are pads for an on board daylight sensor - (R5/Q1 - not provided) this is powered up P1_0 and sensed on P0.7.</p>
+
+<p>Note: there are lots of options here, some are potentially mutually exclusive - look carefully before you make choices - make sure that the pins you want to use are not already being used for some other function (for example: if you try and use P0.2 and P0.3 as GPIOs you may collide with their more likely use as serial input/output).
+
+<a name="downloads"><h2>Downloads</h2></a>
+
+<p>The Eagle board design files can be downloaded from here:</p>
+<ul>
+<li><a href="devboard-8.0.sch">devboard-8.0.sch</a> Eagle schematic
+<li><a href="devboard-8.0.brd">devboard-8.0.brd</a> Eagle layout
+</ul>
+
+</body>
+</html>

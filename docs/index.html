@@ -13,7 +13,7 @@
 <meta http-equiv="expires" content="0">
 </head>
 <body>
-<h1>Cheap RF project Documentation</h1>
+<h1>Cheap RF Project Documentation</h1>
 <img src="d3.png" width="600">
 <h2>Change list</h2>
 <ul>
@@ -77,11 +77,19 @@
 
 <p>We've taken the CC253, added a 32MHz crystal and a handful of capacitors, a resistor, and a PCB folded dipole and used this basic circuit in a half dozen different designs. The first design we're going to make commercially available will be a development prototyping board - something that can be used to develop your own systems.</p>
 
+<a href="generic_schematic.png"><img src="generic_schematic.png" width="400"></a><a href="generic_layout.png"><img src="generic_layout.png" width="500"></a><br>
+
+
 <h3>Programmers</h3>
 
 <p>One downside of our CPU choice is that it requires a non-standard CPU programming system (ie it's not JTAG), we've produced a family of such systems and are releasing a really cheap one for general use. An even cheaper one will be released as soon as possible.</p>
 
-<p>Our programmers can be used as simple USB serial interfaces to talk to our prototyping board, for debug or as an interface, when they are not being used programming.</p> 
+
+<p>We've standardised on a simple 6-pin interface, this let's us use a simple pin header for development boards, and an extremely cheap (free) 6-pin <a href="http://www.tag-connect.com/">TAG-Connect</a> connector for manufacturing and where we need to keep costs down. The debug interface contains power/ground to power the board, the 3 pins required to program the CC25xx chips, and a uart output pin from the CC25xx for debug.</p>
+
+<img src="programmer1/serial.png" >
+
+<p>Our programmers can also be used as simple USB serial interfaces to talk to our prototyping board, for debug or as an interface, when they are not being used for programming.</p> 
 
 <h3>Internet Gateway</h3>
 
@@ -95,8 +103,21 @@
 
 <a name="hardware"><h2>Hardware Platforms</h2></a>
 <h3>Development Boards</h3>
+<table>
+<tr><td><a href="dev_board/board_prototype-8.0.html"><img src="dev_board/board_dev1.png" width="400"></a></td></tr>
+<tr><td><a href="dev_board/board_prototype-8.0.html">Basic Prototyping Board</a></td></tr>
+</table>
 <h3>Other Boards</h3>
+<table>
+<tr><td><a href="dev_playa1.png"><img src="dev_playa1.png" width="400"></a></td><td><a href="dev_orokonui2.png"><img src="dev_orokonui2.png" width="150"></td></tr>
+<tr><td><a href="dev_playa1.png">Burning Man Art Project Board</a></td><td><a href="dev_orokonui2.png">Remote Pest Management System></td></tr>
+</table>
 <h3>Programmers</h3>
+<table>
+<tr><td><a href="programmer1/programmer1.html"><img src="programmer1/dev_prog1.png" width="400"></a></td></tr>
+<tr><td><a href="dev_board/board_prototype-8.0.html">Simple Programmer/Serial Board</a></td></tr>
+</table>
+
 <a name="starting"><h2>Getting Started</h2></a>
 <p>We have a <a href="gettingstarted.html">Getting Started</a> page it includes:</p>
 <ul>
