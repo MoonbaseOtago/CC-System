@@ -17,7 +17,7 @@
 //
 
 #ifndef __PACKET_INTERFACE
-#define PACKET_INTERFACE
+#define __PACKET_INTERFACE
 
 //
 // Copyright 2013 Paul Campbell paul@taniwha.com
@@ -114,6 +114,7 @@ extern void rf_set_channel(rf_handle handle, int channel);
 extern void rf_set_key(rf_handle handle, int k, const unsigned char *key);
 extern void rf_set_mac(rf_handle handle, const unsigned char *mac);
 extern void rf_set_promiscuous(rf_handle handle, int on);
+extern void rf_set_ip_enable(rf_handle handle, int on);
 extern void rf_reset(rf_handle handle);
 extern void rf_set_raw(rf_handle handle, int on);
 extern void rf_send(rf_handle handle, const unsigned char *mac, const unsigned char *data, int len);
@@ -123,6 +124,8 @@ extern void rf_send_repeat(rf_handle handle, int secs, int key,  unsigned char a
 extern int rf_set_suota_upload(rf_handle handle, unsigned char *key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file);
 
 #ifdef __cplusplus
+};
+
 
 class rf_interface {
 public:
@@ -138,6 +141,7 @@ public:
 	void set_promiscuous(int on);
 	void reset(void);
 	void set_raw(int on);
+	void set_ip_enable(int on);
 	void send(const unsigned char *mac, const unsigned char *data, int len);
 	void send_crypto(int key, const unsigned char *mac, const unsigned char *data, int len);
 	int opened_ok() { return fd >= 0; }
@@ -154,7 +158,7 @@ public:
 	} load_info;
 	int set_suota_upload(unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file, load_info *kout=0);
 	bool	update_sent() { return sent; }
-private:
+protected:
 	void	send_suota_key(unsigned char * key);
 	void	set_suota_enable(int on);
 	void	send_repeat(int secs, int key, unsigned char * key_value, unsigned char arch, unsigned char code_base, unsigned long version);
@@ -168,6 +172,8 @@ private:
 	FILE	*auto_dump;
 	pthread_mutex_t	mutex;
 	pthread_mutex_t	suota_mutex;
+	pthread_mutex_t	ip_mutex;
+	pthread_cond_t	ip_cond;
 	pthread_cond_t	cond;
 	pthread_t	tid;
 	bool	sent;
@@ -200,10 +206,10 @@ private:
 	} suota_repeat;
 	static void *repeater(void *);
 	suota_repeat	*repeat_list;
-
+	virtual bool data_receive(bool crypto, unsigned char key, unsigned char *mac, unsigned char *p, int len);
+	virtual bool virtual_command(const char *cc, const char *file, int line);
 };
 
-};
 #endif
 #endif
 

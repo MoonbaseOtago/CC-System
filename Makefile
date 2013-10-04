@@ -23,6 +23,9 @@ THIS_VERSION = 2	# suota version
 # DRV_LEDS = 1		# define for leds driver
 # DRV_DAYLIGHT = 1	# define for daylight detector driver
 
+# kernel tree root for building kernels
+KERNEL_ROOT = .
+
 SDCC_INSTALL_DIR = /usr/local/share/sdcc
 
 all:	packet_loader kernel.ihx  kernel.lk serial.ihx app.ihx app_even.suota app_odd.suota 
@@ -36,7 +39,7 @@ AS = sdas8051
 BASE0 = 0x2000
 BASE1 = 0x5000
 
-CFLAGS = -mmcs51 --model-medium --opt-code-size --debug -Iinclude -DBASE0=$(BASE0) -DBASE1=$(BASE1)
+CFLAGS = -mmcs51 --model-medium --opt-code-size --debug -I$(KERNEL_ROOT)/include -DBASE0=$(BASE0) -DBASE1=$(BASE1)
 CFLAGS += -DTHIS_ARCH=$(THIS_ARCH) -DTHIS_CODE_BASE=$(THIS_CODE_BASE) -DTHIS_VERSION=$(THIS_VERSION)
 ifdef DRV_KEYS
 CFLAGS += -DDRV_KEYS
@@ -102,7 +105,7 @@ $(APP_NAME)_odd.suota:	$(AOBJ) kernel.lk syms.rel app_hdr.rel fixcrc
 #
 # 	example application
 #
-$(APP_NAME).rel:	sample_app/app.c  include/interface.h 
+$(APP_NAME).rel:	sample_app/app.c  $(KERNEL_ROOT)/include/interface.h 
 	$(CC) $(CFLAGS) -c sample_app/app.c -o $(APP_NAME).rel
 
 
@@ -126,8 +129,8 @@ kernel:	kernel.lk app_hdr.rel syms.rel fixcrc
 #
 #	create loader script to export kernel context to loadable apps
 #
-kernel.lk:	kernel.map kernel/map.pl
-	perl kernel/map.pl <kernel.map >kernel.lk
+kernel.lk:	kernel.map $(KERNEL_ROOT)/kernel/map.pl
+	perl $(KERNEL_ROOT)/kernel/map.pl <kernel.map >kernel.lk
 #
 #	build kernel - kernel.ihx is what you build into a board (we'll add somethign here to allow
 #		later patching of MAC addresses)
@@ -139,50 +142,50 @@ kernel.ihx kernel.map:	$(KOBJ) dummy.rel
 #
 #	build kernel objects - leds.rel and kerys.rel should be left out of you don't need them
 #
-task.rel:	kernel/task.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/task.c
-rf.rel:	kernel/rf.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/rf.c
-keys.rel:	kernel/keys.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/keys.c
-suota.rel:	kernel/suota.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/suota.c
-suota_key.rel:	kernel/suota_key.c		#change this if you want a private efault suota key
-	$(CC) $(CFLAGS) -c kernel/suota_key.c
-leds.rel:	kernel/leds.s  
-	$(AS)   -z -l -o leds.rel kernel/leds.s
+task.rel:	$(KERNEL_ROOT)/kernel/task.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/task.c
+rf.rel:	$(KERNEL_ROOT)/kernel/rf.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/rf.c
+keys.rel:	$(KERNEL_ROOT)/kernel/keys.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/keys.c
+suota.rel:	$(KERNEL_ROOT)/kernel/suota.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/suota.c
+suota_key.rel:	$(KERNEL_ROOT)/kernel/suota_key.c		#change this if you want a private efault suota key
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/suota_key.c
+leds.rel:	$(KERNEL_ROOT)/kernel/leds.s  
+	$(AS)   -z -l -o leds.rel $(KERNEL_ROOT)/kernel/leds.s
 
 #
 #	this file provides access to kernel symbols exported using the linker .lk file - this
 #		is solely to avoid a bug in sdcc's linker which complains if you have a -g
 #		directive to declare a global variable but never use it
 #
-syms.rel:	kernel/syms.c  
-	$(CC) $(CFLAGS) -c kernel/syms.c
+syms.rel:	$(KERNEL_ROOT)/kernel/syms.c  
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/syms.c
 
 #
 #	code header for unified build
 #
-app_integrated.rel:	kernel/app_integrated.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/app_integrated.c
+app_integrated.rel:	$(KERNEL_ROOT)/kernel/app_integrated.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/app_integrated.c
 
 #
 #	code header for SUOTA apps
 #
-app_hdr.rel:	kernel/app_hdr.c  include/rf.h include/task.h include/interface.h  include/suota.h include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/app_hdr.c
+app_hdr.rel:	$(KERNEL_ROOT)/kernel/app_hdr.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/app_hdr.c
 
 #
 #	dummy code header for kernel build
 #
-dummy.rel:	kernel/dummy.c  include/protocol.h
-	$(CC) $(CFLAGS) -c kernel/dummy.c
+dummy.rel:	$(KERNEL_ROOT)/kernel/dummy.c  $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(KERNEL_ROOT)/kernel/dummy.c
 
 #
 #	app to fill in code headers in SUOTA builds and create loadable binaries
 #
-fixcrc:	kernel/fixcrc.c
-	$(HOST_CC) -o fixcrc kernel/fixcrc.c
+fixcrc:	$(KERNEL_ROOT)/kernel/fixcrc.c
+	$(HOST_CC) -o fixcrc $(KERNEL_ROOT)/kernel/fixcrc.c
 
 
 #
@@ -190,12 +193,14 @@ fixcrc:	kernel/fixcrc.c
 #	plus example interactive version - this app will host a SUOTA server for your
 #	network
 #
-packet_loader:	packet_interface.o packet_loader.o
+packet_loader:	packet_interface.o packet_loader.o 
 	$(HOST_CPP) -o packet_loader packet_interface.o packet_loader.o -lpthread -g -lz
-packet_loader.o:	serial/packet_interface.h serial/test.cpp
-	$(HOST_CPP) -c serial/test.cpp -o packet_loader.o -I include -I serial -g 
-packet_interface.o:	serial/packet_interface.h serial/packet_interface.cpp
-	$(HOST_CPP) -c serial/packet_interface.cpp -I include -I serial -g
+packet_loader.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/test.cpp  $(KERNEL_ROOT)/serial/ip_packet_interface.h
+	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/test.cpp -o packet_loader.o -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g 
+packet_interface.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/packet_interface.cpp
+	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g
+ip_packet_interface.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/ip_packet_interface.cpp $(KERNEL_ROOT)/serial/ip_packet_interface.h
+	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/ip_packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g
 
 
 #

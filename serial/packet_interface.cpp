@@ -29,7 +29,11 @@
 #include <zlib.h>
 #include <poll.h>
 #include <sys/time.h>
-
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h> 
+#include <netdb.h>
 
 //
 //	C bindings
@@ -192,6 +196,7 @@ rf_interface::rf_interface(const char *serial_device, rf_rcv rcv_callback)
 rf_interface::~rf_interface()
 {
 	suota_upload *sp;
+
 	pthread_mutex_lock(&mutex);
 	if (fd >= 0) {
 		shutdown = 1;
@@ -490,6 +495,12 @@ rf_interface::send_packet(int cmd, int len, const unsigned char *data)
 	}
 }
 
+bool 
+rf_interface::data_receive(bool crypto, unsigned char key, unsigned char *mac, unsigned char *p, int len)
+{
+	return 0;
+}
+
 void 
 rf_interface::rf_thread()
 	{
@@ -580,11 +591,15 @@ rf_interface::rf_thread()
 					break;
 				case PKT_CMD_RCV_PACKET:
 				case PKT_CMD_RCV_PACKET_BROADCAST:
+					if (data_receive(0, 0, &data[0], &data[8], len-8))
+						break;
 					if (callback) 
 						(*callback)(this, cmd == PKT_CMD_RCV_PACKET_BROADCAST?1:0, 0, 0, &data[0], &data[8], len-8);
 					goto log;
 				case PKT_CMD_RCV_PACKET_CRYPT:
 				case PKT_CMD_RCV_PACKET_CRYPT_BROADCAST:
+					if (data_receive(1, data[0], &data[1], &data[9], len-9))
+						break;
 					if (suota_list && ((packet *)&data[9])->type == P_TYPE_SUOTA_REQ) {
 						packet *p = (packet *)&data[9];
 						suota_req *srp = (suota_req*)&p->data[0];
@@ -1188,11 +1203,19 @@ rf_interface::command(const char *cc, const char *file, int line)
 		}
 		break;
 	default:
-		fprintf(stderr, "%s: unknown command '%s'\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp-1);
-		res = 0;
+		if (!virtual_command(cc, file, line)) {
+			fprintf(stderr, "%s: unknown command '%s'\n", hdr(file, line, &tmp[0], sizeof(tmp)), cp-1);
+			res = 0;
+		}
 		break;
 	}
 	return res;
+}
+
+bool
+rf_interface::virtual_command(const char *cc, const char *file, int line) 
+{
+	return 0;
 }
 
 static int
@@ -1310,3 +1333,4 @@ rf_interface::set_suota_upload(unsigned char *key, unsigned char arch, unsigned 
 	suota_list = sp;
 	return  1;
 } 
+

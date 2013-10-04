@@ -21,7 +21,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef IP_GATEWAY
+#include "ip_packet_interface.h"
+#else
 #include "packet_interface.h"
+#endif
 
 bool on=0;
 int key=0;
@@ -37,6 +41,9 @@ help()
 	printf("c: set rf channel 11-26             - c channel\n");
 	printf("h: help\n");
 	printf("i: initialise file\n");
+#ifdef IP_GATEWAY
+	printf("I: enable IP gateway\n");
+#endif
 	printf("m: set mac                          - m a:b:c:d:e:f:g\n");
 	printf("K: load key (16 hex bytes)          - K key-num value \n");
 	printf("O: receiver on\n");
@@ -57,7 +64,11 @@ help()
 int
 main(int argc, char **argv)
 {
+#ifdef IP_GATEWAY
+	ip_rf_interface *rfp;
+#else
 	rf_interface *rfp;
+#endif
 	const char *tp;
 	char b[256];
 	char *init=0;
@@ -121,11 +132,19 @@ main(int argc, char **argv)
 	} else {
 		tp = argv[1];
 	}
+#ifdef IP_GATEWAY
+	rfp = new ip_rf_interface(tp, 0);
+#else
 	rfp = new rf_interface(tp, 0);
+#endif
 	if (!rfp->opened_ok()) {
 		if (argc < 2) {
 			delete rfp;
+#ifdef IP_GATEWAY
+			rfp = new ip_rf_interface("/dev/ttyACM1", 0);
+#else
 			rfp = new rf_interface("/dev/ttyACM1", 0);
+#endif
 			if (rfp->opened_ok()) 
 				goto ok;
 		}

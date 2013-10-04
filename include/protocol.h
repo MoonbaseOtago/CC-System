@@ -35,6 +35,17 @@ typedef struct broadcast_filter {	// for playa protocol this is used as the firs
 #define P_TYPE_NOP		0
 #define P_TYPE_SUOTA_REQ	1
 #define P_TYPE_SUOTA_RESP	2
+#define P_TYPE_IP_LOW		3
+#define	P_TYPE_IP_LOOKUP	4
+#define	P_TYPE_IP_LOOKUP_RESP	5
+#define	P_TYPE_IP_CONNECT_TCP	6
+#define	P_TYPE_IP_OPEN_UDP	7
+#define	P_TYPE_IP_OPEN_RESP	8
+#define	P_TYPE_IP_CLOSE		9
+#define	P_TYPE_IP_CLOSE_RESP	10
+#define	P_TYPE_IP_SEND		11
+#define	P_TYPE_IP_RECV		12
+#define P_TYPE_IP_HIGH		12
 
 #define P_TYPE_OTHERS		0x40 // writing your own code, want to add your own code
 			     	     // allocate something above here
