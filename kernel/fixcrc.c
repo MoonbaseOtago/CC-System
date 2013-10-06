@@ -231,5 +231,5 @@ main(int argc, char **argv)
 	fwrite(&h[0], 4, 1, stdout);
 	fwrite(&k[0], 16, 1, stdout);
 	fwrite(&m[mn], len, 1, stdout);
-	return 0;
+	exit(0);
 }

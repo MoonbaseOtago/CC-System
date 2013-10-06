@@ -104,7 +104,10 @@ APP_REQUIRED=kernel.lk syms.rel app_hdr.rel fixcrc
 #			- in the makefile remove everything below "## Kernel starts here ##"
 #			- edit APP_REQUIRED to make it empty
 #			- edit KERNEL_ALL to make it empty
-
+#
+#	Below is a 'push' target you can use to automatically bump the version number, build
+#	and push a new image to a device
+#
 
 #
 # unified build	for example application - you must include app_integrated.rel
@@ -128,6 +131,37 @@ $(APP_NAME)_odd.suota:	$(AOBJ) $(APP_REQUIRED)
 #
 $(APP_NAME).rel:	$(APP_ROOT)/$(APP_NAME).c  $(KERNEL_ROOT)/include/interface.h 
 	$(CC) $(CFLAGS) -c $(APP_ROOT)/$(APP_NAME).c -o $(APP_NAME).rel
+
+#
+#	code to automatically build and push new software versions of code to
+#	a single remote device.
+#
+#	Put the key you want to SUOTA with and the channel it happens on below, use the
+#	command 
+#	
+#		"make push"
+#
+#	to build new code and push it to a device
+#
+APP_SUOTA_KEY=-k ccb17cb57448634ce595c15acf966145
+APP_SUOTA_CHANNEL=11
+
+push:	$(AOBJ) $(APP_REQUIRED) THIS_VERSION packet_loader
+	version=`cat ./THIS_VERSION` ; \
+	version=$$(($$version+1));\
+	odd=$$(($$version%2));\
+	if test $$odd -eq 1; then \
+		$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i tmp.ihx  $(AOBJ) syms.rel app_hdr.rel;\
+	else \
+		$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i tmp.ihx  $(AOBJ) syms.rel app_hdr.rel;\
+	fi ; \
+	./fixcrc -v $$version $(APP_SUOTA_KEY) <tmp.ihx >$(APP_NAME).suota;\
+	echo $$version >THIS_VERSION ; \
+	echo Installing version $$version ; \
+	./packet_loader -c $(APP_SUOTA_CHANNEL) -x $(APP_NAME).suota
+
+THIS_VERSION:
+	echo $(THIS_VERSION) >THIS_VERSION
 
 
 ############## Kernel starts here ############################################

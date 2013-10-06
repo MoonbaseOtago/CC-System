@@ -607,9 +607,9 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 
 <p>The <b>packet_loader</b> program takes one argument - the serial port that should be opened - it defaults to /dev/USB0. If you give it the <b>-i script</b> flag it will open the script file and execute commands from it (for example it could set up crypto keys and SUOTA files) then sit there forever responding to incoming packets.</p>
 
-<p>Alternatively the <b>-e suota_file</b> flag allows you to push a single copy of a new set of firmware to a network, you need to have attached the crypto key to the suota file using the <b>fix_crc -k ...</b> command during the build process - if you use the <b>-e</b> flag then you can also use the  <b>-c channel</b> and <b>-m mac</b> flags</p>
+<p>Alternatively the <b>-x suota_file</b> flag allows you to push a single copy of a new set of firmware to a network, you need to have attached the crypto key to the suota file using the <b>fix_crc -k ...</b> command during the build process - if you use the <b>-</b> flag then you can also use the  <b>-c channel</b> and <b>-m mac</b> flags</p>
 
-<p>If you don't give the <b>-i</b> or <b>-e</b> flags it will open an interactive session and allow you to send and receive interactive commands.</p>
+<p>If you don't give the <b>-i</b> or <b>-x</b> flags it will open an interactive session and allow you to send and receive interactive commands.</p>
 
 <p>In this API crypto keys are 16 bytes - mac addresses are 8 bytes (not the traditional 6). In the scripting interface You can optionally insert colons to delineate bytes in keys and mac addresses.</p>
 

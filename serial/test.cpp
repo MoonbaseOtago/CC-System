@@ -211,6 +211,7 @@ ok:
 					break;
 				sleep(1);
 			}
+			exit(0);
 		}
 		exit(9);
 	} else
