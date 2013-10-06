@@ -473,7 +473,7 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 <p>Define <b>DRV_LEDS</b> in the Makefile</p>
 <p>WS2811/2812 LED are RGB are becoming ubiquitous, you see them in cheap LED strips from China, in Adafruit's NeoPixels, and our playa board. It has a, umm, challenging, protocol to drive by bit-banging.</p>
 
-<p>We're releasing the code we use for the playa board, it drives 2 strings of 1 pixel each, and a voltage up converter - it's a tightly tuned piece of assembly code, you'll have to tweak it to drive longer strips. We use an in-memory buffer for the two pixels that is a 6 byte array RRGGBB - <b>leds_rgb(&amp;array[0])</b> powers up the voltage up converter and sends data to the two pixels, <b>rgb_off()</b> powers it down (you should send black to it first).</p>
+<p>We're releasing the code we use for the playa board, it drives 2 strings of 1 pixel each, and a voltage up converter - it's a tightly tuned piece of assembly code, you'll have to tweak it to drive longer strips. We use an in-memory buffer for the two pixels that is a 6 byte array GGRRBB - <b>leds_rgb(&amp;array[0])</b> powers up the voltage up converter and sends data to the two pixels, <b>rgb_off()</b> powers it down (you should send black to it first).</p>
 
 <h4>Capacitive buttons</h4>
 <p>Define <b>DRV_KEYS</b> in the Makefile</p>

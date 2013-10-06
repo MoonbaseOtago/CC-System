@@ -5,8 +5,9 @@ DELAY2 = 1
 DELAY3 = 1
 DPS    =       0x0092
 
-	.area DSEG    (DATA)
-led_tmp:	.ds 24
+	.area XSEG    (DATA)
+	.globl	_led_tmp
+_led_tmp::	.ds 24
 	.area CSEG    (CODE)
 	.globl	_leds_rgb
 	.globl	_leds_off
@@ -17,7 +18,7 @@ _leds_off:
 _leds_rgb:
 	mov	r4, #3
 	mov	DPS, #1
-	mov	dptr, #led_tmp
+	mov	dptr, #_led_tmp
 loop_rgb:
 		mov	DPS, #0
 		movx	a, @dptr
@@ -56,7 +57,7 @@ m5:
 		djnz	r4, loop_rgb
 
 	mov	DPS, #0
-	mov	dptr, #led_tmp
+	mov	dptr, #_led_tmp
 	mov	r1, #24
 	mov	IE, #0
 loop:
