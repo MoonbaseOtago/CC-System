@@ -75,6 +75,7 @@ main(int argc, char **argv)
 	char *mac=0;
 	char *exp_file=0;
 	int chan=11;
+	int endit = 0;
 
 	while (argc >= 2 && argv[1] && argv[1][0] =='-') {
 		switch (argv[1][1]) {
@@ -110,7 +111,19 @@ main(int argc, char **argv)
 				mac = argv[1];
 			}
 			break;
+		case 'I':
+			endit = 1;
+			if (argv[1][2]) {
+				init = &argv[1][2];
+			} else
+			if (argc > 2) {
+				argc--;
+				argv++;
+				init = argv[1];
+			}
+			break;
 		case 'i':
+			endit = 0;
 			if (argv[1][2]) {
 				init = &argv[1][2];
 			} else
@@ -217,8 +230,10 @@ ok:
 	} else
 	if (init) {	// non interactive versions
 		rfp->initialise(init);
-		for (;;)
-			sleep(100);
+		if (!endit) {
+			for (;;)
+				sleep(100);
+		}
 	} else {
 		help();
 		for (;;) {
