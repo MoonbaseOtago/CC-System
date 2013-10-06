@@ -327,7 +327,7 @@ to stop multiple retransmission of broadcast packets.</p>
 
 <p>So crypto is easy - install identical keys at both ends, implement the <b>APP_GET_KEY</b> event to set them when requested and start passing your key number(s) in the <b>crypto_key</b> parameter of <b>rf_send()</b>.</p>
 
-<p>For testing it's easy to choose a fixed, simple key, but when the time comes to build production code you need a nice random key, I use the following command to make them - for extra ramndomness seed it with some log file that changes rapidly.</p>
+<p>For testing it's easy to choose a fixed, simple key, but when the time comes to build production code you need a nice random key, I use the following command to make them - for extra randomness seed it with some log file that changes rapidly.</p>
 
 <pre>
 
@@ -590,7 +590,9 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 <li>post process the .ihx file to make a .suota file using fixcrc which fills in the code_header structure and creates a binary file suitable for the serial loader code to broadcast for SUOTA
 </ul>
 
-<p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we recommend that for a standalone app you build your kernel in one place and copy over the frozen kernel state, that represents the kernel you have frozen in the field to the new build environment - copy the Makefile and trim it to match - instructions on how do do this are contained in the makefile itself.</p>
+<p>The top level Makefile already does all this for you, no need to actually write this stuff yourself.</p>
+
+<p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we recommend that for a SUOTA app you put our release tree somewhere, and make a separate development tree elsewhere. Start by copying the Makefile from the top of the release tree, and the samples app sample_app/app.c into your new directory and edit them to suit - instructions on how do do this are contained in the Makefile itself. Type 'make' to build a kernel and program it into your board. Then, with  a serial gateway attached type "make push" to build an app and push it to a board.</p>
 
 <a name="sa"><h2>Standalone applications</h2></a>
 
