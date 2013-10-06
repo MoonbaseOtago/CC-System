@@ -750,7 +750,8 @@ rf_interface::command(const char *cc, const char *file, int line)
 	unsigned char key[16];
 	unsigned char sk[16];
 	char tmp[100];
-	char c = *cp++;
+	char xc = *cp++;
+	char c;
 	int res = 1;
 	int i;
 	unsigned char *macp;
@@ -759,7 +760,7 @@ rf_interface::command(const char *cc, const char *file, int line)
 
 	while (*cp == ' ' || *cp == '\t')
 		cp++;
-	switch (c) {
+	switch (xc) {
 	case 0:
 		return res;
 	case 'o':	
@@ -1015,8 +1016,8 @@ rf_interface::command(const char *cc, const char *file, int line)
 			break;
 		for (;i < len; i++)
 			data[i] = rand();
-		if (c == '!') {
-			send_crypto(0, macp, data, len);
+		if (xc == '!') {
+			send_crypto(k, macp, data, len);
 		} else {
 			send(macp, data, len);
 		}
