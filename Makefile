@@ -24,11 +24,21 @@ THIS_VERSION = 2	# suota version
 # DRV_DAYLIGHT = 1	# define for daylight detector driver
 
 # kernel tree root for building kernels
-KERNEL_ROOT = .
+KERNEL_ROOT=.
+SERIAL_ROOT=.
+
+#
+#	where the app is
+#
+APP_ROOT=./sample_app
+APP_NAME=app
+
 
 SDCC_INSTALL_DIR = /usr/local/share/sdcc
+KERNEL_ALL = packet_loader kernel.ihx  kernel.lk serial.ihx 
+#KERNEL_ALL = 
 
-all:	packet_loader kernel.ihx  kernel.lk serial.ihx app.ihx app_even.suota app_odd.suota 
+all:	$(KERNEL_ALL) $(APP_NAME).ihx $(APP_NAME)_even.suota $(APP_NAME)_odd.suota 
 
 HOST_CC = gcc
 HOST_CPP = g++
@@ -57,7 +67,6 @@ LDFLAGS = -muwx -b SSEG=0x80 $(LDLIBS) -M -Y
 LDEVEN = -b GSINIT0=$(BASE0)
 LDODD  = -b GSINIT0=$(BASE1)
 
-APP_NAME=app
 
 # kernel objects
 KOBJ = task.rel suota.rel rf.rel suota_key.rel
@@ -70,19 +79,31 @@ endif
 
 CFLAGS += -DAPP        
 AOBJ = $(APP_NAME).rel
+APP_REQUIRED=kernel.lk syms.rel app_hdr.rel fixcrc
+#APP_REQUIRED=
 
 ############## App starts here ############################################
 #
 #	To build a SUOTA app:
 #
 #	- create a new app build directory
-#	- follow the instructions below for building a kernel for SUOTA
 #	- copy this Makefile to the app build directory
-#	- remove everything below "## Kernel starts here ##"
-#	- edit APP_NAME
-#	- put your app's object files in AOBJ
-#	- edit THIS_VERSION to 1 (increment each time you make a downloadble build)
-#	
+#	- copy sample_app/app.c to app build directory
+#	- change directory to the new build directory
+#	- edit the Makefile
+#		- edit APP_NAME 
+#		- edit APP_ROOT to point to "."
+#		- edit KERNEL_ROOT and SERIAL_ROOT to point to the place you installed the kernel
+#		- set "THIS_ARCH" to match your hardware
+#		- choose a value for "THIS_CODE_BASE" (probably this means choosing a random CODE_BASE between 1-254)
+#		- edit THIS_VERSION to 1 (increment each time you make a downloadble build)
+#	- type "make" to build a kernel/etc
+#	- build and test your kernel and app until you want to freeze it then:
+#		- make a subdirectory called 'save' and copy everything into it (just in case you lose the kernel)
+#		- edit the Makefile again
+#			- in the makefile remove everything below "## Kernel starts here ##"
+#			- edit APP_REQUIRED to make it empty
+#			- edit KERNEL_ALL to make it empty
 
 
 #
@@ -94,19 +115,19 @@ $(APP_NAME).ihx:	$(KOBJ) $(AOBJ) kernel.ihx app_integrated.rel
 #
 # downloadable SUOTA builds for example application - you must include app_hdr.rel and syms.rel and -f kernel.lk
 #
-$(APP_NAME)_even.suota:	$(AOBJ) kernel.lk syms.rel app_hdr.rel fixcrc
+$(APP_NAME)_even.suota:	$(AOBJ) $(APP_REQUIRED)
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i $(APP_NAME)_even.ihx  $(AOBJ) syms.rel app_hdr.rel
 	./fixcrc -v $(THIS_VERSION) <$(APP_NAME)_even.ihx >$(APP_NAME)_even.suota
 
-$(APP_NAME)_odd.suota:	$(AOBJ) kernel.lk syms.rel app_hdr.rel fixcrc
+$(APP_NAME)_odd.suota:	$(AOBJ) $(APP_REQUIRED)
 	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i $(APP_NAME)_odd.ihx  $(AOBJ) syms.rel app_hdr.rel
 	./fixcrc -v $(THIS_VERSION) <$(APP_NAME)_odd.ihx >$(APP_NAME)_odd.suota
 
 #
 # 	example application
 #
-$(APP_NAME).rel:	sample_app/app.c  $(KERNEL_ROOT)/include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o $(APP_NAME).rel
+$(APP_NAME).rel:	$(APP_ROOT)/$(APP_NAME).c  $(KERNEL_ROOT)/include/interface.h 
+	$(CC) $(CFLAGS) -c $(APP_ROOT)/$(APP_NAME).c -o $(APP_NAME).rel
 
 
 ############## Kernel starts here ############################################
@@ -195,12 +216,12 @@ fixcrc:	$(KERNEL_ROOT)/kernel/fixcrc.c
 #
 packet_loader:	packet_interface.o packet_loader.o 
 	$(HOST_CPP) -o packet_loader packet_interface.o packet_loader.o -lpthread -g -lz
-packet_loader.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/test.cpp  $(KERNEL_ROOT)/serial/ip_packet_interface.h
-	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/test.cpp -o packet_loader.o -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g 
-packet_interface.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/packet_interface.cpp
-	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g
-ip_packet_interface.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/serial/ip_packet_interface.cpp $(KERNEL_ROOT)/serial/ip_packet_interface.h
-	$(HOST_CPP) -c $(KERNEL_ROOT)/serial/ip_packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(KERNEL_ROOT)/serial -g
+packet_loader.o:	$(SERIAL_ROOT)/serial/packet_interface.h $(SERIAL_ROOT)/serial/test.cpp  $(SERIAL_ROOT)/serial/ip_packet_interface.h
+	$(HOST_CPP) -c $(SERIAL_ROOT)/serial/test.cpp -o packet_loader.o -I $(KERNEL_ROOT)/include -I $(SERIAL_ROOT)/serial -g 
+packet_interface.o:	$(SERIAL_ROOT)/serial/packet_interface.h $(SERIAL_ROOT)/serial/packet_interface.cpp
+	$(HOST_CPP) -c $(SERIAL_ROOT)/serial/packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(SERIAL_ROOT)/serial -g
+ip_packet_interface.o:	$(SERIAL_ROOT)/serial/packet_interface.h $(SERIAL_ROOT)/serial/ip_packet_interface.cpp $(SERIAL_ROOT)/serial/ip_packet_interface.h
+	$(HOST_CPP) -c $(SERIAL_ROOT)/serial/ip_packet_interface.cpp -I $(KERNEL_ROOT)/include -I $(SERIAL_ROOT)/serial -g
 
 
 #
@@ -210,8 +231,8 @@ ip_packet_interface.o:	$(KERNEL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/s
 SOBJ = serial_app.rel app_integrated.rel
 serial.ihx:	$(KOBJ) packet_interface.o $(SOBJ) 
 	$(LD) $(LDFLAGS_SA) -i serial.ihx $(KOBJ) $(SOBJ)
-serial_app.rel:	serial/serial_app.c  include/rf.h include/task.h include/interface.h  include/suota.h serial/packet_interface.h include/protocol.h
-	$(CC) $(CFLAGS) -c serial/serial_app.c
+serial_app.rel:	$(SERIAL_ROOT)/serial/serial_app.c  $(KERNEL_ROOT)/include/rf.h $(KERNEL_ROOT)/include/task.h $(KERNEL_ROOT)/include/interface.h  $(KERNEL_ROOT)/include/suota.h $(SERIAL_ROOT)/serial/packet_interface.h $(KERNEL_ROOT)/include/protocol.h
+	$(CC) $(CFLAGS) -c $(SERIAL_ROOT)/serial/serial_app.c
 
 
 
@@ -239,24 +260,24 @@ suota_test:	test2_even.suota test3_odd.suota test4_even.suota test5_odd.suota
 test2_even.suota:	test2.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test2.ihx  test2.rel syms.rel app_hdr.rel
 	./fixcrc -v 2 -k $(SUOTA_KEY) <test2.ihx >test2_even.suota
-test2.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test2.rel -DVV="\"Test 2\n\"" -DVER=2
+test2.rel:	$(APP_ROOT)/app.c  $(KERNEL_ROOT)/include/interface.h 
+	$(CC) $(CFLAGS) -c $(APP_ROOT)/app.c -o test2.rel -DVV="\"Test 2\n\"" -DVER=2
 
 test3_odd.suota:	test3.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test3.ihx  test3.rel syms.rel app_hdr.rel
 	./fixcrc -v 3 -k $(SUOTA_KEY) <test3.ihx >test3_odd.suota
-test3.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test3.rel -DVV="\"Test 3\n\"" -DVER=3
+test3.rel:	$(APP_ROOT)/app.c  $(KERNEL_ROOT)/include/interface.h 
+	$(CC) $(CFLAGS) -c $(APP_ROOT)/app.c -o test3.rel -DVV="\"Test 3\n\"" -DVER=3
 
 test4_even.suota:	test4.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDEVEN) $(LDFLAGS) -f kernel.lk -i test4.ihx  test4.rel syms.rel app_hdr.rel
 	./fixcrc -v 4 -k $(SUOTA_KEY) <test4.ihx >test4_even.suota
-test4.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test4.rel -DVV="\"Test 4\n\"" -DVER=4
+test4.rel:	$(APP_ROOT)/app.c  $(KERNEL_ROOT)/include/interface.h 
+	$(CC) $(CFLAGS) -c $(APP_ROOT)/app.c -o test4.rel -DVV="\"Test 4\n\"" -DVER=4
 
 test5_odd.suota:	test5.rel kernel.lk syms.rel app_hdr.rel fixcrc
 	$(LD) $(LDODD) $(LDFLAGS) -f kernel.lk -i test5.ihx  test5.rel syms.rel app_hdr.rel
 	./fixcrc -v 5 -k $(SUOTA_KEY) <test5.ihx >test5_odd.suota
-test5.rel:	sample_app/app.c  include/interface.h 
-	$(CC) $(CFLAGS) -c sample_app/app.c -o test5.rel -DVV="\"Test 5\n\"" -DVER=5
+test5.rel:	$(APP_ROOT)/app.c  $(KERNEL_ROOT)/include/interface.h 
+	$(CC) $(CFLAGS) -c $(APP_ROOT)/app.c -o test5.rel -DVV="\"Test 5\n\"" -DVER=5
 
