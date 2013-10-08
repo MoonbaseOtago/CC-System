@@ -23,10 +23,10 @@
 <li><a href="#api">Application API</a>
         <ul>
         <li><a href="#tasks">Tasks and timers</a>
-
         <li><a href="#apps">Applications</a>
         <li><a href="#rf">Sending/receiving packets</a>
         <li><a href="#encryption">Encryption</a>
+        <li><a href="#power">Power Management</a>
         <li><a href="#suota">Software Update</a>
         <li><a href="#interrupts">Interrupts</a>
         <li><a href="#serial">Serial Debug</a>
@@ -46,7 +46,7 @@
 
 <a name="tasks"><h3>Tasks and timers</h3></a>
 
-<p>The totally minimal OS simply consists of a timer queue - clients can queue events to occur some time in the future - there are 32kHz/256 timer ticks per second (we provide a define HZ which is 32000/256 - 1 second) - this timer runs with the rest of the chip in it's very deep sleep mode (we'll add an API for that soon).</p>
+<p>The totally minimal OS simply consists of a timer queue - clients can queue events to occur some time in the future - there are 32kHz/256 timer ticks per second (we provide a define HZ which is 32000/256 - 1 second) - this timer runs with the rest of the chip in it's very deep sleep mode (check out the power management section below).</p>
 
 <p>A 'task' is a queueable element, it must be stored in __xdata, it contains a pointer to some code and
 some task queue bookkeeping (these should be initialised to 0) - create a task with something like: </p>
@@ -65,7 +65,7 @@ some task queue bookkeeping (these should be initialised to 0) - create a task w
 
 </pre>
 
-<p>The maximum delay you can queue is 65534 ticks - about 12 minutes (the limit of the hardware sleep timer) - any more and you need to queue a long delay and count yourself</p>
+<p>The maximum delay you can queue is 65534 ticks - about 8.7 minutes (the limit of the hardware sleep timer) - any more and you need to queue a long delay and count yourself</p>
 
 <p>You can cancel a task with:</p>
 
@@ -223,6 +223,8 @@ some task queue bookkeeping (these should be initialised to 0) - create a task w
 
 <p><b>rf_send()</b> sends a packet <b>pkt</b> of length <b>len</b>, and applies crypto if requested using the supplied <b>crypto_key</b> number - use <b>NO_CRYPTO</b> if you don't want the packet encrypted - key numbers must be less than or equal to 0x7f.</p>
 
+<P>You cannot send if the RF receiver is off (ie you have called <b>rf_receive_off()</b>), the results are undefined.</p>
+
 <p> Key changes are done at the app level whenever the RF layer needs to switch keys it will call your app with <b>APP_GET_KEY</b> - in response you must call <b>rf_set_key()</b> using the value in <b>rtx_key</b> to choose a key (it's quite valid to just return a single key to all calls if that's what you need).</p>
 
 <p>No guarantee is provided that the datagram will be received. The packet must be stored in __xdata space.</p>
@@ -334,6 +336,21 @@ to stop multiple retransmission of broadcast packets.</p>
 	openssl rand -hex -rand /var/log/syslog 16
 
 </pre>
+
+<a name="power"><h3>Power Management</h3></a>
+
+<p>The kernel automatically powers down the CPU when it is idle, when there are no interrupts to service and no tasks to execute the CPU is put into the lowest power state possible. We support two power states - IDLE and PM2 - PM2 is a very low power state, in it the main CPU clock is turned off, in this mode the CPU is pulling ~1uA, it's the mode you want to put the CPU in to make your battery last a long time.</p>
+
+<p>In PM2 only the timer (used for task scheduling) and external interrupts can be used to wake the CPU - other peripherals (serial/rf/etc) are shutdown. The low power sleep timer used by our task scheduler is limited to a maximum sleep time of about 8.7 minutes, if you want to wait all day (or all night) create a task that counts in units of 8 minutes or so.</p>
+
+<p>There are two conditions that must be met before the task scheduler will start using PM2 state rather than the higher power idle state when it has nothing to do:</p>
+<ul>
+<li>The RF subsystem must be off - call <b>rf_receive_off()</b>
+<li>The global flag <b>sys_active</b>, if set, inhibits PM2 - this flag is never set in our kernel it's provided to you so your drivers can control power management. If you don;t have a device that requires the CPU to stay in the idle state leave it 0.
+</ul>
+
+<p>By default at application startup time the RF receiver is on (for SUOTA) and <b>sys_active</b> is cleared.</p>
+
 
 <a name="suota"><h3>Software Update</h3></a>
 

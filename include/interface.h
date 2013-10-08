@@ -44,6 +44,7 @@ extern u8 __xdata * __data rx_mac;
 __bit __at (0x03) suota_key_required;
 __bit __at (0x04) suota_enabled;
 __bit __at (0x05) suota_allow_any_code;
+__bit __at (0x06) sys_active;	
 #define		KEY_X		0
 #define		KEY_O		1
 #define		KEY_LEFT	2

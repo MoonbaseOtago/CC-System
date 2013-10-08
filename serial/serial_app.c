@@ -537,11 +537,13 @@ unsigned char my_app(unsigned char op)
 {
 	switch (op) {
 	case APP_INIT:
+    		rf_receive_on();
 		uart_setup();
 		suota_key_required = 0;
 		send_printf("Startup\n");
 		P2DIR |= 1;
 		P2 |= 1;
+		rf_set_transmit_power(XMT_POWER_MAXDB);
 		break;
 	case APP_GET_MAC:
 		return 0;

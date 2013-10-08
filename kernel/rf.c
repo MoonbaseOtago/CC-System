@@ -30,6 +30,7 @@ __bit rx_busy0;
 __bit rx_busy1;
 __bit rx_set;
 __bit rx_rset;
+__bit rx_active;
 static u8 __data rx_len0;
 static u8 __data rx_len1;
 u8 __data rx_len;
@@ -503,13 +504,17 @@ rf_set_transmit_power(char power) __naked
 void
 rf_receive_on(void)
 {
+	RFST = 0xED;	// flush 
+	RFST = 0xED;
 	RFST = 0xec;
 	RFST = 0xe3;
+	rx_active = 1;
 }
 
 void
 rf_receive_off(void)
 {
+	rx_active = 0;
 	RFST = 0xef;
 	RFST = 0xec;
 }

@@ -37,6 +37,8 @@ static unsigned int __data last;
 static unsigned char __data tmp0;
 static unsigned char __data tmp1;
 
+extern __bit rx_active;
+
 #ifndef SYSTEM_ATTRIBUTES
 #define SYSTEM_ATTRIBUTES 0
 #endif
@@ -228,6 +230,7 @@ xxxx_sleep() __naked
 	.odd
 _sleep:
 	mov 	PCON, _enter_sleep_mod_flag
+	nop
 	ret
 	__endasm;
 }
@@ -1163,6 +1166,7 @@ void
 main()
 {
 	EA = 0;
+	sys_active = 0;
 	//
 	CLKCONCMD=0x80;	// 32MHz ext, int 32khz
 	while (CLKCONSTA != 0x80)
@@ -1352,15 +1356,37 @@ m_8:
 		orl	a, _waitq+1
 		jnz	m_10
 			mov	_enter_sleep_mod_flag, #1//enter_sleep_mod_flag = 1;
-			mov	_SLEEPCMD, #4 //	  SLEEPCMD = 4;//(radio_busy?0:2);
+			jb	_rx_active, m_85
+			jb	_sys_active, m_85
+
+				mov	a, _CLKCONSTA
+				anl	a, #0x38		// tsaved = CLKCONSTA & TICKSPD_MASK
+				push	acc			
+				anl	_CLKCONSTA, #~0x38	// CLKCONCMD &= ~TICKSPD_MASK;
+
+				mov	_SLEEPCMD, #6 //	SLEEPCMD = PM2
+				setb	EA		//      EA = 1;
+m_81d:				mov 	a, _enter_sleep_mod_flag
+				cjne	a, #1, m_11c    //      while(enter_sleep_mod_flag) 
+					lcall	_sleep	//		sleep();
+					sjmp	m_81d
+
+m_81c:					mov	a, _CLKCONSTA	// while ((CLKCONSTA & OSC) != CLKCONCMD_32MHZ);
+					anl	a, #1<<6
+					jnz	m_81c
+				pop	acc
+				orl	_CLKCONCMD, a		// CLKCONCMD |= tsaved;
+				clr	EA
+				sjmp	m_8x//		EA = 0;
+
+m_85:			mov	_SLEEPCMD, #4 //	  SLEEPCMD = 4;//(radio_busy?0:2); IDLE
 			setb	EA	//		  EA = 1;
 m_8b:			mov	a, _enter_sleep_mod_flag
 			cjne	a, #1, m_8a	// 	  while(enter_sleep_mod_flag) 
 				acall	_sleep	//		sleep();
 				sjmp	m_8b
-m_8a:
-			clr	EA	//		EA = 0;
-			mov	r6, #0	//		delta = 0;
+m_8a:			clr	EA	//		EA = 0;
+m_8x:			mov	r6, #0	//		delta = 0;
 			mov	r7, #0
 			ajmp	m_1
 
@@ -1394,12 +1420,43 @@ pop ACC
 				mov	r6, #0	//		delta = 0;
 				mov	r7, #0
 				ljmp	m_1
+
 m_11:						//	} else {
 				mov	_enter_sleep_mod_flag, #1	// enter_sleep_mod_flag = 1;
 				mov	dpl, r0
 				mov	dph, a
+				jb	_rx_active, m_55
+				jb	_sys_active, m_55
+
+					mov	a, _CLKCONSTA
+					anl	a, #0x38		// tsaved = CLKCONSTA & TICKSPD_MASK
+					push	acc			
+					anl	_CLKCONSTA, #~0x38	// CLKCONCMD &= ~TICKSPD_MASK;
+
+					lcall 	_start_timer	// 	start_timer(xpt->time);
+					mov	_SLEEPCMD, #6 //	SLEEPCMD = PM2
+					setb	EA		//      EA = 1;
+m_11d:					mov 	a, _enter_sleep_mod_flag
+					cjne	a, #1, m_11c    //      while(enter_sleep_mod_flag) 
+						lcall	_sleep	//		sleep();
+						sjmp	m_11d
+
+m_11c:						mov	a, _CLKCONSTA	// while ((CLKCONSTA & OSC) != CLKCONCMD_32MHZ);
+						anl	a, #1<<6
+						jnz	m_11c
+					pop	acc
+					orl	_CLKCONCMD, a		// CLKCONCMD |= tsaved;
+					clr	EA	//		EA = 0;
+					lcall	_stop_timer	//	delta = stop_timer();
+					mov	r6, dpl
+					mov	r7, dph
+					sjmp	m_56
+
+
+
+m_55:
 				lcall 	_start_timer	// 	start_timer(xpt->time);
-				mov	_SLEEPCMD, #4 //	SLEEPCMD = 4;//(radio_busy?0:2);
+				mov	_SLEEPCMD, #4 //	SLEEPCMD = IDLE
 				setb	EA		//      EA = 1;
 m_11b:				mov 	a, _enter_sleep_mod_flag
 				cjne	a, #1, m_11a    //      while(enter_sleep_mod_flag) 
@@ -1409,6 +1466,7 @@ m_11a:				clr	EA	//		EA = 0;
 				lcall	_stop_timer	//	delta = stop_timer();
 				mov	r6, dpl
 				mov	r7, dph
+m_56:	
 #ifdef TDEBUG
        mov     a, _ST0
 	push	_ST1
