@@ -36,6 +36,7 @@
 <li><a href="#mem">Memory organisation</a>
 <li><a href="#compiler">Compiler Issues</a>
 <li><a href="#build">Build system</a>
+<li><a href="#gui">The Programmer GUI</a>
 <li><a href="#sa">Standalone applications</a>
 <li><a href="#net">Internet access</a>
 </ul>
@@ -610,6 +611,62 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 <p>The top level Makefile already does all this for you, no need to actually write this stuff yourself.</p>
 
 <p>You have a couple of options, you can create a new subdirectory in the build tree and put your app in there, but we recommend that for a SUOTA app you put our release tree somewhere, and make a separate development tree elsewhere. Start by copying the Makefile from the top of the release tree, and the samples app sample_app/app.c into your new directory and edit them to suit - instructions on how do do this are contained in the Makefile itself. Type 'make' to build a kernel and program it into your board. Then, with  a serial gateway attached type "make push" to build an app and push it to a board.</p>
+
+<a name="gui"><h2>The Programmer GUI</h2></a>
+
+<p>The GUI program we use for programming has lots of options - here's a quick rundown:</p<
+
+<img src="s5.png" width="900">
+
+<p>The "Connect" button opens the serial device specified, halts the CPU, and extracts information about its model and memory.</p>
+
+<p>There are two select/load/read/write sections - the upper one is for loading the .ihx (Intel hex format) files used for the kernel and standalone apps, this code is usually loaded at the start of memory at 0, the lower one is for the .suota files (in a proprietary binary format) used for SUOTA  applications loaded in high memory.</p>
+
+<p>Typically you use the "Select" button to choose a file, then "Load", "Write", and "Run" every time you compile a new version of your program.</p>
+
+<ul>
+<li>Select - chooses the file that is loaded by the "Load" button
+<li>Load - loads the currently selected file
+	<ul>
+	<li>Start - shows the start address of the code to be loaded
+	<li>End - shows the end address
+	</ul>
+<li>Write - copies the data to the CPU
+	<ul>
+	<li>Verify after write - verifies the data - this is very slow, only enable it if you think you have a problem
+	<li>Erase Page  - erases flash page by page as your data is written - this should normally be set
+	</ul>
+<li>Read - this doesn't work well yet, and is disabled
+<li>Erase Chip - erases the entire chip, unlocks it if it was locked (use this before you load a new kernel if you also want any incompatible SUOTA applications, compiled to work with older kernel versions, removed).
+<li>Write Mac - (only applies to Kernels or Standalone Apps) - if checked a MAC will be inserted low in memory - there are two text boxes here - put an 8 hex digit (32-bit) value in each to represent a MAC address, if "Auto Inc MAC: is checked the right hand value will be incremented on every write
+</ul>
+
+<p>Debugging:</p>
+<ul>
+<li>Run - starts a cpu
+<li>Step - single steps 
+<li>Halt - stops the cpu
+<li>PC - the location to start at
+<li>Registers - current register state
+</ul>
+
+<p>Status:</p>
+<ul>
+<li>data transmitted from the CPU uart is displayed in the central text window
+<li>Chip - the currently sensed chip - data loaded at 'Connect'
+<li>CC status byte - current CPU status
+<li>CC config byte - more current CPU status
+<li>Status - system state
+</ul>
+
+<p>Sections seldom used:</p>
+<ul>
+<li>Flash CC - used for setting chip options, in particular locking it down
+<li>Raw Pins - poke the raw debug interface pins
+<li>Interface/production - used for some older programmers
+</ul>
+
+<p>The GUI program remembers a much of the information you enter when it is changed - you can safely run multiple copies of the GUI but, since this default data is shared, you need to be careful as you may not get the default values you expect when you start.</p>
 
 <a name="sa"><h2>Standalone applications</h2></a>
 

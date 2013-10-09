@@ -78,7 +78,7 @@
 <li>Windows: we have no specific windows instructions - if you have problems please get in touch, if you fix problems also lets us know how you got things working so we can update this document
 </ul>
 
-<p>Run the app from src/ccload, it's useful to run it from a shell as it will log any characters a development board sends on its serial port</p>
+<p>Run the app from src/ccload</p>
 
 <p>You should see something like:</p>
 <a href-"s1.png"><img src="s1.png" width="800"></a>
@@ -96,11 +96,14 @@
 
 <a href-"s2.png"><img src="s2.png" width="800"></a>
 
-<p>Note the 'Connect' button has changed to 'Disconnect', the 'Chip' panel in the top right contains information about the chip found on the development board, the CC Status Byte tells you the development system's current state</p>
+<p>Note that the 'Connect' button has changed to 'Disconnect', the 'Chip' panel in the top right contains information about the chip found on the development board, the CC Status Byte tells you the development system's current state</p>
+
+<p>In the programming GUI there are two sets of boxes for loading code - one for loading kernels and standalone apps and one for .loading SUOTA applications - for this example we're only using the one labelled "Read/Write Kernel/Standalone App"</p>
 
 <p>Now's a good time to set up automatic MAC generation - check the "Write MAC" box, next to it are 2 text boxes put 8 hex digits into each box, check the "AutoincMAC" box, now every time you write a kernel it will get a unique MAC address assigned to the board. How should you find a unique MAC address to use - I steal one from an existing device that works in another domain: ethernet or wifi - put the first 8 hex digits of your laptop's ethernet mac address into the left hand box, and the last 4 hex digits, followed by "0000" into the right hand box.</p>
 
 <a name="load"><h2>Loading a Kernel</h2></a>
+
 
 <p>Press the "Select File" button, it will pop up a file open dialog box, navigate to the place you built the kernel and choose the kernel.ihx file. The press the "load" button to load the kernel into the GUI program - it will look like:</p>
 <a href-"s3.png"><img src="s3.png" width="800"></a>
