@@ -638,6 +638,7 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 	</ul>
 <li>Read - this doesn't work well yet, and is disabled
 <li>Erase Chip - erases the entire chip, unlocks it if it was locked (use this before you load a new kernel if you also want any incompatible SUOTA applications, compiled to work with older kernel versions, removed).
+<li>Lock - (not yet working) clears the last bit if flash memory to lock the chip (use Erase Chip to gain access again)
 <li>Write Mac - (only applies to Kernels or Standalone Apps) - if checked a MAC will be inserted low in memory - there are two text boxes here - put an 8 hex digit (32-bit) value in each to represent a MAC address, if "Auto Inc MAC: is checked the right hand value will be incremented on every write
 </ul>
 
@@ -661,7 +662,7 @@ into the correct place. But the world isn't perfect, sometimes a node may miss a
 
 <p>Sections seldom used:</p>
 <ul>
-<li>Flash CC - used for setting chip options, in particular locking it down
+<li>Port Control - used for setting external ports
 <li>Raw Pins - poke the raw debug interface pins
 <li>Interface/production - used for some older programmers
 </ul>
