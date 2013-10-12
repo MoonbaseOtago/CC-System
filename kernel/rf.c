@@ -1374,9 +1374,11 @@ rf_send(packet __xdata *pkt, u8 len, u8 crypto, __xdata unsigned char *xmac) __n
 		pop	dpl
 		sjmp	0216$
 
-0217$:		mov	_rtx_key, a
+0217$:		push	dpl
+		push	dph
+		mov	_rtx_key, a
 		lcall   _suota_get_key
-		sjmp	0216$
+		sjmp	0212$
 
 0219$:		clr	_xmt_crypto
 		jb	_ACC_0, 0216$

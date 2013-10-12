@@ -107,6 +107,7 @@ unsigned char my_app(unsigned char op)
 		//
 		// for playa broadcast protocol first 3 bytes are of type broadcast_filter
 		//
+
 #ifdef NOTDEF
 		if (rx_len < 3)
 			return;

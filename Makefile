@@ -160,6 +160,11 @@ push:	$(AOBJ) $(APP_REQUIRED) THIS_VERSION packet_loader
 	echo Installing version $$version ; \
 	./packet_loader -c $(APP_SUOTA_CHANNEL) -x $(APP_NAME).suota
 
+p:
+	version=`cat ./THIS_VERSION` ; \
+	echo Installing version $$version ; \
+	./packet_loader -c $(APP_SUOTA_CHANNEL) -x $(APP_NAME).suota
+
 THIS_VERSION:
 	echo $(THIS_VERSION) >THIS_VERSION
 
