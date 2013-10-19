@@ -49,6 +49,34 @@ extern void pd(unsigned char __xdata *, u8);
 extern void pdd(unsigned char __pdata *, u8);
 extern void ph(u8);
 
+static unsigned char fl=0;
+static void led_flash(task __xdata*t);
+static __xdata task led_flash_task = {led_flash,0,0,0};
+static void led_flash(task __xdata*t)
+{
+	if ((fl&1) != 0) {
+		P2_0 = 1;
+	} else {
+		P2_0 = 0;
+		if (fl == 2)
+			return;
+	}
+	queue_task(&led_flash_task, HZ/2);
+}
+
+static void led_test_ok(task __xdata*t);
+static __xdata task led_test_ok_task = {led_test_ok,0,0,0};
+static void led_test_ok(task __xdata*t)
+{
+	if (fl == 0) {
+		P2_0 = 0;
+		return;
+	}
+	fl--;
+	P2_0 ^= 1;
+	queue_task(&led_test_ok_task, HZ/4);
+}
+
 static void reset() __naked
 {
 	__asm;
@@ -70,7 +98,7 @@ static void tx_intr() __naked
 		pop	ACC
 		pop	PSW
 		jb	_rcv_busy, $0902
-			anl	_P2, #~1
+			clr	p2.0
 $0902:		reti
 $0703:
 	push	_DPS
@@ -140,7 +168,7 @@ $0003:
 	inc	_rx_count
 	jb	_rcv_busy, $0005
 		setb	_rcv_busy
-		orl	_P2, #1
+		setb	p2.0
 		push	_DPL1
 		push	_DPH1
 	
@@ -220,7 +248,7 @@ static void uart_rcv_thread(task __xdata*t)
 		if (rx_count == 0) {
 			rcv_busy = 0;
 			if (!tx_busy)
-				P2 &= ~1;
+				P2_0 = 0;
 			EA = 1;
 			return;
 		}
@@ -386,7 +414,7 @@ send_rcv_packet()
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
-		P2 |= 1;
+		P2_0 = 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -406,7 +434,7 @@ ser_putc(char c)
         tx_count--;
         if (!tx_busy) {
                 tx_busy = 1;
-		P2 |= 1;
+		P2_0 = 1;
                 tx_count++;
                 U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -443,7 +471,7 @@ send_printf(char  __code *cp)
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
-		P2 |= 1;
+		P2_0 = 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -480,7 +508,7 @@ send_printf_xdata(char  __xdata *cp)
 	tx_count -= xl;
 	if (!tx_busy) {
 		tx_busy = 1;
-		P2 |= 1;
+		P2_0 = 1;
 		tx_count++;
 		U0DBUF = *tx_out++;
 		if (tx_out == &tx_buff[TX_SIZE])
@@ -542,7 +570,8 @@ unsigned char my_app(unsigned char op)
 		suota_key_required = 0;
 		send_printf("Startup\n");
 		P2DIR |= 1;
-		P2 |= 1;
+		P2_0 = 1;
+		queue_task(&led_flash_task, HZ/2);
 		rf_set_transmit_power(XMT_POWER_MAXDB);
 		break;
 	case APP_GET_MAC:
@@ -554,6 +583,19 @@ unsigned char my_app(unsigned char op)
 		rf_set_key(&local_suota_key[0]);
 		break;
 	case APP_RCV_PACKET:
+#ifdef NOTDEF
+		if (rx_packet->type == P_TYPE_MANUFACTURING_TEST &&
+			rx_packet->data[0] == 0x12 &&
+			rx_packet->data[1] == 0x34 &&
+			rx_packet->data[2] == 0x56 &&
+			rx_packet->data[3] == 0x78 &&
+			rx_packet->data[4] == 0x90) {
+			P2_0 = 1;
+			fl = 5;
+			queue_task(&led_test_ok_task, HZ/4);
+			return;
+		}
+#endif
 		send_rcv_packet();
 		break;
 	}

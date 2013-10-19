@@ -46,6 +46,7 @@ typedef struct broadcast_filter {	// for playa protocol this is used as the firs
 #define	P_TYPE_IP_SEND		11
 #define	P_TYPE_IP_RECV		12
 #define P_TYPE_IP_HIGH		12
+#define P_TYPE_MANUFACTURING_TEST 0x3f
 
 #define P_TYPE_OTHERS		0x40 // writing your own code, want to add your own code
 			     	     // allocate something above here
