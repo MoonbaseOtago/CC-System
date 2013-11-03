@@ -1560,7 +1560,7 @@ task_restart() __naked
 	setb	_EA
 	ljmp	_restart_point
 0777$:
-#ifdef DRV_KEYS
+#ifndef DRV_KEYS
 	.db	_t1_vect
 #endif
 	.db	_uart_rx_0_vect
