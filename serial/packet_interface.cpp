@@ -806,7 +806,7 @@ rf_interface::command(const char *cc, const char *file, int line)
 		break;
 	case 'K':
 		k = strtol(cp, &cp, 0);
-		if (k < 0 || k >= 8) {
+		if ((k < 0 || k >= 8) && k != suota_key) {
                                fprintf(stderr, "%s: invalid key number %d\n", hdr(file, line, &tmp[0], sizeof(tmp)), k);
                                res = 0;
 			break;
@@ -822,7 +822,11 @@ rf_interface::command(const char *cc, const char *file, int line)
                                		fprintf(stderr, "%s: no key found\n", hdr(file, line, &tmp[0], sizeof(tmp)));
 					break;
 				}
-				set_key(k, key);
+				if (k == suota_key) {
+					send_suota_key(key);
+				} else {
+					set_key(k, key);
+				}
 				break;
 			}
 			if (i != 0 && *cp == ':')

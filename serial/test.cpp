@@ -76,6 +76,7 @@ main(int argc, char **argv)
 	char *exp_file=0;
 	int chan=11;
 	int endit = 0;
+	int verbose=0;
 
 	while (argc >= 2 && argv[1] && argv[1][0] =='-') {
 		switch (argv[1][1]) {
@@ -121,6 +122,9 @@ main(int argc, char **argv)
 				argv++;
 				init = argv[1];
 			}
+			break;
+		case 'V':
+			verbose=1;
 			break;
 		case 'i':
 			endit = 0;
@@ -218,6 +222,10 @@ ok:
 		}
 		if (rfp->set_suota_upload(0,0,0,0,exp_file,&l)) {
 			rfp->send_repeat_suota_key(5, &l.key[0], l.arch, l.code_base, l.version);
+			if (verbose) {
+				rfp->set_auto_dump(stderr);
+				rfp->set_dump_outgoing(1);
+			}
 			rfp->on();
 			for (;;) {
 				if (rfp->update_sent())

@@ -158,6 +158,7 @@ public:
 	} load_info;
 	int set_suota_upload(unsigned char * key, unsigned char arch, unsigned char code_base, unsigned long version, const char *file, load_info *kout=0);
 	bool	update_sent() { return sent; }
+	void	set_dump_outgoing(bool v) { dump_outgoing=v;}
 protected:
 	void	send_suota_key(unsigned char * key);
 	void	set_suota_enable(int on);
