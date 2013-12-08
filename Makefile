@@ -62,7 +62,7 @@ CFLAGS += -DDRV_DAYLIGHT
 endif
 LDLIBS_SA = -k $(SDCC_INSTALL_DIR)/lib/medium -l mcs51 -l libsdcc -l libint -l liblong -l libfloat
 LDLIBS = -k $(SDCC_INSTALL_DIR)/lib/medium -l libsdcc -l libint -l liblong -l libfloat
-LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=7
+LDFLAGS_SA = -muwx -b SSEG=0x80 $(LDLIBS_SA) -M -Y -b BSEG=8
 LDFLAGS = -muwx -b SSEG=0x80 $(LDLIBS) -M -Y 
 LDEVEN = -b GSINIT0=$(BASE0)
 LDODD  = -b GSINIT0=$(BASE1)

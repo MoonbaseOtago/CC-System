@@ -53,8 +53,8 @@ extern code_hdr __code CODE_HEADER;
 
 __code code_hdr *__xdata current_code;
 __code code_hdr * __xdata next_code;
-static suota_req *__xdata rq;
-static suota_resp *__xdata rp;
+//static suota_req * __xdata __xdata rq;
+static suota_resp __xdata  *__xdata rp;
 
 #ifndef BASE0
 #define BASE0 (8*1024)			// we assume the 5lSBs  of these are 0
@@ -178,6 +178,7 @@ suota_setup()
 uart_init();		
 putstr("SUOTA_START\n");
 #endif
+	suota_inprogress = 0;
 	suota_enabled = 0;
 	suota_allow_any_code = 0;
 	suota_key_required = 0;	// will be set at APP_INIT
@@ -626,6 +627,7 @@ retry:
 #ifdef SDEBUG
 		putstr("preparing to restart\n");
 #endif
+		suota_inprogress = 0;
 		if (crc_check(&next_code->len[0]))  {	// true if failed
 #ifdef SDEBUG
 			putstr("CRC check failed\n");
@@ -679,6 +681,7 @@ try_again:
 static void suota_request()
 {
 	__asm;
+	setb	_suota_inprogress
 	mov	dptr, #_tmp_packet		//	packet __xdata* pkt = (packet __xdata *)&tmp_packet[0];
 	
 	mov	a, #P_TYPE_SUOTA_REQ		//	pkt->type = P_TYPE_SUOTA_REQ;
@@ -889,6 +892,7 @@ suota_timeout(task __xdata*t) __naked
 	mov	r0, #_suota_tcount
 	movx	a, @r0
 	jnz	0001$			//	if (suota_tcount == 0) {
+		clr	_suota_inprogress
 		mov	r0, #_suota_state//		suota_state = SUOTA_STATE_STARTING;
 		movx	@r0, a
 		mov	r0, #_suota_version//		suota_version[0] = 0;

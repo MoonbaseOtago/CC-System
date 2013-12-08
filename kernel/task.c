@@ -1372,11 +1372,11 @@ m_81d:				mov 	a, _enter_sleep_mod_flag
 					sjmp	m_81d
 
 m_81c:					mov	a, _CLKCONSTA	// while ((CLKCONSTA & OSC) != CLKCONCMD_32MHZ);
-					anl	a, #1<<6
-					jnz	m_81c
+					jnb	a.6, m_81c
 				pop	acc
 				orl	_CLKCONCMD, a		// CLKCONCMD |= tsaved;
 				clr	EA
+				mov	_rtx_key, #NO_CRYPTO	// crypto key is invalidated in PM2
 				sjmp	m_8x//		EA = 0;
 
 m_85:			mov	_SLEEPCMD, #4 //	  SLEEPCMD = 4;//(radio_busy?0:2); IDLE
@@ -1442,11 +1442,11 @@ m_11d:					mov 	a, _enter_sleep_mod_flag
 						sjmp	m_11d
 
 m_11c:						mov	a, _CLKCONSTA	// while ((CLKCONSTA & OSC) != CLKCONCMD_32MHZ);
-						anl	a, #1<<6
-						jnz	m_11c
+						jnb	a.6, m_11c
 					pop	acc
 					orl	_CLKCONCMD, a		// CLKCONCMD |= tsaved;
 					clr	EA	//		EA = 0;
+					mov	_rtx_key, #NO_CRYPTO	// crypto key is invalidated in PM2
 					lcall	_stop_timer	//	delta = stop_timer();
 					mov	r6, dpl
 					mov	r7, dph

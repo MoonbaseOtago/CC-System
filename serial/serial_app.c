@@ -572,7 +572,7 @@ unsigned char my_app(unsigned char op)
 		P2DIR |= 1;
 		P2_0 = 1;
 		queue_task(&led_flash_task, HZ/2);
-		rf_set_transmit_power(XMT_POWER_MAXDB);
+		rf_set_transmit_power(XMT_POWER_4DB);
 		break;
 	case APP_GET_MAC:
 		return 0;

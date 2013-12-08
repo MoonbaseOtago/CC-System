@@ -31,6 +31,7 @@ typedef struct task {
 } task;
 
 void queue_task(task __xdata *, unsigned int);
+void queue_task_0(task __xdata *);
 void cancel_task(task __xdata * );
 
 #define HZ (32000/256)
