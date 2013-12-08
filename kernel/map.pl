@@ -25,8 +25,11 @@ while (<>) {
 #  rx_broadcast
 #  key_down
 #  _limit
+	if (/^C:.*([0-9A-F][0-9A-F]*).*s_BSEG .*$/ ) {
+		$bs = hex($1);
+	}
 	if (/^C:.*([0-9A-F][0-9A-F]*).*l_BSEG .*$/ ) {
-		printf STDOUT "-b BSEG=0x%x\n", hex($1);
+		$bl = hex($1);
 	}
 
 # DATA
@@ -235,5 +238,6 @@ while (<>) {
 
 }
 printf STDOUT "-b xSEG=0x%x\n", $a+$b;
+printf STDOUT "-b BSEG=0x%x\n", $bs+$bl;
 printf STDOUT "-e\n";
 
