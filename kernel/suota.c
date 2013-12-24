@@ -180,6 +180,7 @@ putstr("SUOTA_START\n");
 #endif
 	suota_inprogress = 0;
 	suota_enabled = 0;
+	suota_sent = 0;
 	suota_allow_any_code = 0;
 	suota_key_required = 0;	// will be set at APP_INIT
 	if (CODE_HEADER.len[0] == 1) {	// integrated app
@@ -535,6 +536,7 @@ incoming_suota_packet_req()	__naked
 	inc     r0
 	mov     a, _rx_mac+1
 	movx    @r0, a
+	setb	_suota_sent
    	ljmp   _rf_send
 	__endasm;
 }
