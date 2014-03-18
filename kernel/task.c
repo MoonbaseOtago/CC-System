@@ -227,7 +227,7 @@ static void
 xxxx_sleep() __naked
 {
 	__asm;
-	.odd
+	.even
 _sleep:
 	mov 	PCON, _enter_sleep_mod_flag
 	nop
@@ -1443,6 +1443,10 @@ m_11d:					mov 	a, _enter_sleep_mod_flag
 
 m_11c:						mov	a, _CLKCONSTA	// while ((CLKCONSTA & OSC) != CLKCONCMD_32MHZ);
 						jnb	a.6, m_11c
+m_11e:						mov	a, _SLEEPSTA
+						jb	a.0, m_11e
+m_11f:						mov	a, _SLEEPSTA
+						jnb	a.0, m_11f
 					pop	acc
 					orl	_CLKCONCMD, a		// CLKCONCMD |= tsaved;
 					clr	EA	//		EA = 0;
