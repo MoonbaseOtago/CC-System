@@ -256,6 +256,12 @@ void x_ph() __naked
 #define pd(x, y)
 #define pdd(x, y)
 #endif
+void p8(unsigned char __xdata *p) {
+	u8 i;
+	for (i = 0; i < 8; i++) 
+		puthex(*p++);
+}
+
 void
 rf_set_key(u8 __xdata * key) __naked
 {
@@ -276,6 +282,7 @@ rf_set_key(u8 __xdata * key) __naked
    	ret
 	__endasm;
 }
+
 
 void
 rf_set_key_c(u8 __code * key) __naked

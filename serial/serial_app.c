@@ -308,10 +308,12 @@ static void uart_rcv_thread(task __xdata*t)
 				break;
 			case PKT_CMD_SET_KEY:
 				memcpy(&keys[r[0]&7][0], &r[1], 16);
+				rtx_key = NO_CRYPTO;
 				break;
 			case PKT_CMD_SET_SUOTA_KEY:
 				memcpy(&local_suota_key[0], &r[0], 16);
 				suota_key_required = 1;
+				rtx_key = NO_CRYPTO;
 				break;
 			case PKT_CMD_SET_MAC:
 				rf_set_mac(&r[0]);
